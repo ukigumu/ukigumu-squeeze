@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "retrievedAt": "2026-07-31",
+  "downloadedFixtures": [
+    {
+      "path": "Sources/WebP/official-test.webp",
+      "url": "https://raw.githubusercontent.com/webmproject/libwebp/a4d7a715337ded4451fec90ff8ce79728e04126c/examples/test.webp",
+      "authorOrProject": "WebP project",
+      "license": "BSD-3-Clause",
+      "sha256": "1bf9449d529b491c6eb22ec84d42217e43cf9af0ffe391fa7a30b29b037f098a",
+      "format": "WebP",
+      "properties": ["opaque", "official codec fixture"],
+      "tests": ["decode", "WebP to JPEG"]
+    },
+    {
+      "path": "Sources/AVIF/alpha.avif",
+      "url": "https://raw.githubusercontent.com/AOMediaCodec/libavif/b71e67f953b2cc905c14869296c72f266cd31683/tests/data/abc_color_irot_alpha_irot.avif",
+      "authorOrProject": "Alliance for Open Media libavif",
+      "license": "BSD-2-Clause and libavif LICENSE terms",
+      "sha256": "b371cc88244a873131e4d10ff9363d71ce4f41cf333bd4a491b38d970d9abd3b",
+      "format": "AVIF",
+      "properties": ["alpha", "rotation transform"],
+      "tests": ["AVIF decode", "AVIF to PNG"]
+    },
+    {
+      "path": "Sources/AVIF/one-pixel.avif",
+      "url": "https://raw.githubusercontent.com/AOMediaCodec/libavif/b71e67f953b2cc905c14869296c72f266cd31683/tests/data/white_1x1.avif",
+      "authorOrProject": "Alliance for Open Media libavif",
+      "license": "BSD-2-Clause and libavif LICENSE terms",
+      "sha256": "ea4e43d1f07e4c00de16c13afa32376111bb306e51f08212cf4c1b6064df3667",
+      "format": "AVIF",
+      "properties": ["one pixel"],
+      "tests": ["AVIF capability"]
+    },
+    {
+      "path": "Sources/JPEG/exif-orientation.jpg",
+      "url": "https://raw.githubusercontent.com/AOMediaCodec/libavif/b71e67f953b2cc905c14869296c72f266cd31683/tests/data/paris_exif_orientation_5.jpg",
+      "authorOrProject": "Alliance for Open Media libavif",
+      "license": "BSD-2-Clause and libavif LICENSE terms",
+      "sha256": "28dcca536b37386675d951462a2cc9d1a4693fbcb0db8fd5994c959e3eed6234",
+      "format": "JPEG",
+      "properties": ["EXIF orientation 5"],
+      "tests": ["metadata preservation"]
+    },
+    {
+      "path": "Metadata/exif-xmp-icc.jpg",
+      "url": "https://raw.githubusercontent.com/AOMediaCodec/libavif/b71e67f953b2cc905c14869296c72f266cd31683/tests/data/dog_exif_extended_xmp_icc.jpg",
+      "authorOrProject": "Alliance for Open Media libavif",
+      "license": "BSD-2-Clause and libavif LICENSE terms",
+      "sha256": "fc67748b1f04aba4ae38476adae70bd9c6157ee0d86db1e93c05aca5815b42e4",
+      "format": "JPEG",
+      "properties": ["EXIF", "extended XMP", "ICC profile"],
+      "tests": ["metadata preservation", "metadata removal"]
+    },
+    {
+      "path": "Sources/PNG/indexed-transparent.png",
+      "url": "https://raw.githubusercontent.com/AOMediaCodec/libavif/b71e67f953b2cc905c14869296c72f266cd31683/tests/data/draw_points.png",
+      "authorOrProject": "Alliance for Open Media libavif",
+      "license": "BSD-2-Clause and libavif LICENSE terms",
+      "sha256": "48d684549df1239efcbda1418684e19d827bdd3d83d5beea1f90fce3822f9572",
+      "format": "PNG",
+      "properties": ["indexed", "transparency"],
+      "tests": ["PNG decode", "PNG to AVIF"]
+    },
+    {
+      "path": "Sources/HEIC/colors.heic",
+      "url": "https://raw.githubusercontent.com/strukturag/libheif/1a3583bcce77de6d3f8701c0758e3954863681ba/fuzzing/data/corpus/colors-no-alpha.heic",
+      "authorOrProject": "libheif",
+      "license": "LGPL-3.0-or-later fixture corpus",
+      "sha256": "76f82ffc717a647b1c9c2551e5ea0545832a2d3216c7540f7e5b092282a04b63",
+      "format": "HEIC",
+      "properties": ["opaque"],
+      "tests": ["HEIC decode", "HEIC to JPEG"]
+    },
+    {
+      "path": "Sources/TIFF/multipage.tiff",
+      "url": "https://raw.githubusercontent.com/python-pillow/Pillow/693df7b42c666f88c719f9973be0ad71607328e0/Tests/images/multipage.tiff",
+      "authorOrProject": "Pillow",
+      "license": "HPND",
+      "sha256": "e6ea0b435d075d8c1381db743a9be2603a9419afccbb23cc0a4fd42c29169d51",
+      "format": "TIFF",
+      "properties": ["three pages", "palette"],
+      "tests": ["multipage TIFF preservation", "TIFF to PNG"]
+    }
+  ],
+  "syntheticFixtures": [
+    {"path": "Sources/WebP/animated.webp", "format": "WebP", "properties": ["animated", "two frames"], "sha256": "659cc8f62d781bfde1b9650c07375c1f5d3940dcef4734da8531c4a7623b661a"},
+    {"path": "Sources/WebP/transparent.webp", "format": "WebP", "properties": ["alpha"], "sha256": "29eb188901c33590945535cabec9b818568f547aabf4641956be8a82b1fff43c"},
+    {"path": "Sources/Synthetic/gradient.png", "format": "PNG", "properties": ["RGB", "odd dimensions"], "sha256": "ddfabdd3f3259a9ba7297b91bf7847a745acce3a264d29e0a0fce63892536813"},
+    {"path": "Sources/Synthetic/progressive.jpeg", "format": "JPEG", "properties": ["progressive", "odd dimensions"], "sha256": "4c77efe994d483489cf0a023c77891b7f7fdbdea7df47dee3847d72c8deed5ed"},
+    {"path": "Sources/Synthetic/solid.jpg", "format": "JPEG", "properties": ["solid color"], "sha256": "c455ad08c2e3c4350dd1fa4a48f2f2a8fa294e3ecf9115e50fdcb1ce29332fa0"},
+    {"path": "Sources/Synthetic/transparent.png", "format": "PNG", "properties": ["alpha"], "sha256": "bede982474560a6b6dbcdc17f51827e43ff4978c66fc04c1013e6bd100f8a36b"},
+    {"path": "Sources/HEIC/synthetic.heic", "format": "HEIC", "properties": ["odd dimensions"], "sha256": "ac3181e669491fc45d7edeb5a1c728d49b59f22e2e27870a51d25bee8040c79b"},
+    {"path": "Sources/TIFF/simple.tiff", "format": "TIFF", "properties": ["single page"], "sha256": "b7726582f32b9d1677768d86a1678bd7b9864ffd56944dfbd561d5e4837a7b1f"},
+    {"path": "Corrupt/truncated.jpg", "format": "JPEG", "properties": ["truncated"], "sha256": "89b06b1eaae50109fa4e122deaf854566b63db7c1853f4ef1237286e9967d3a6"},
+    {"path": "Corrupt/not-an-image.png", "format": "PNG", "properties": ["invalid content"], "sha256": "5464533c9647b67eb320c40ccc5959537c09102ae75388f6a7675b433e745c9d"}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "configurations" : [
+    {
+      "id" : "A94F91BB-90ED-4955-B83B-8408AE33FD06",
+      "name" : "Default",
+      "options" : {}
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "skippedTests" : [],
+      "target" : {
+        "containerPath" : "container:GrumpySqueeze.xcodeproj",
+        "identifier" : "E10000000000000000000002",
+        "name" : "GrumpySqueezeUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
