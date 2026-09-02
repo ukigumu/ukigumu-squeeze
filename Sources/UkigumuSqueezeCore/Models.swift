@@ -209,7 +209,7 @@ public struct ProcessingResult: Identifiable, Encodable, Sendable {
     }
 }
 
-public enum GrumpySqueezeError: LocalizedError {
+public enum UkigumuSqueezeError: LocalizedError {
     case unsupportedFormat(URL)
     case invalidImage(URL)
     case outputFormatUnavailable(ImageFormat)

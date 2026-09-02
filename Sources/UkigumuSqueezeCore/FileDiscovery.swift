@@ -51,8 +51,8 @@ public struct FileDiscovery: Sendable {
 
     private func isIgnoredFile(_ url: URL) -> Bool {
         let name = url.lastPathComponent.lowercased()
-        return name == "grumpy-squeeze-metadata.json"
-            || name.hasPrefix(".grumpy-squeeze-")
+        return name == "ukigumu-squeeze-metadata.json"
+            || name.hasPrefix(".ukigumu-squeeze-")
             || name.hasSuffix(".tmp")
     }
 

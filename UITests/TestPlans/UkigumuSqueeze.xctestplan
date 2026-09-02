@@ -14,9 +14,9 @@
       "parallelizable" : false,
       "skippedTests" : [],
       "target" : {
-        "containerPath" : "container:GrumpySqueeze.xcodeproj",
+        "containerPath" : "container:UkigumuSqueeze.xcodeproj",
         "identifier" : "E10000000000000000000002",
-        "name" : "GrumpySqueezeUITests"
+        "name" : "UkigumuSqueezeUITests"
       }
     }
   ],

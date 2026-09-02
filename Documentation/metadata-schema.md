@@ -1,6 +1,6 @@
 # Metadata report schema v1
 
-`grumpy-squeeze-metadata.json` is a UTF-8 JSON object with these top-level keys:
+`ukigumu-squeeze-metadata.json` is a UTF-8 JSON object with these top-level keys:
 
 - `schemaVersion`: integer, currently `1`
 - `applicationVersion`: semantic version string

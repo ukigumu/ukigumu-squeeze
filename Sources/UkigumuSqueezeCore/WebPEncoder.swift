@@ -18,7 +18,7 @@ enum WebPEncoder {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
                 | CGBitmapInfo.byteOrder32Big.rawValue
         ) else {
-            throw GrumpySqueezeError.validationFailed(url)
+            throw UkigumuSqueezeError.validationFailed(url)
         }
         context.interpolationQuality = .high
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
@@ -35,7 +35,7 @@ enum WebPEncoder {
             )
         }
         guard byteCount > 0, let output else {
-            throw GrumpySqueezeError.validationFailed(url)
+            throw UkigumuSqueezeError.validationFailed(url)
         }
         defer { WebPFree(output) }
         try Data(bytes: output, count: byteCount).write(to: url, options: .withoutOverwriting)

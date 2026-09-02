@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct GrumpySqueezeApp: App {
+struct UkigumuSqueezeApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {

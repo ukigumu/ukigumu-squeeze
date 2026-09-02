@@ -2,46 +2,46 @@
 import PackageDescription
 
 let package = Package(
-    name: "GrumpySqueeze",
+    name: "UkigumuSqueeze",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "GrumpySqueezeCore", targets: ["GrumpySqueezeCore"]),
-        .executable(name: "GrumpySqueeze", targets: ["GrumpySqueezeApp"])
+        .library(name: "UkigumuSqueezeCore", targets: ["UkigumuSqueezeCore"]),
+        .executable(name: "UkigumuSqueeze", targets: ["UkigumuSqueezeApp"])
     ],
     dependencies: [
         .package(url: "https://github.com/SDWebImage/libwebp-Xcode.git", exact: "1.5.0")
     ],
     targets: [
         .target(
-            name: "GrumpySqueezeCore",
+            name: "UkigumuSqueezeCore",
             dependencies: [
                 .product(name: "libwebp", package: "libwebp-Xcode")
             ]
         ),
         .executableTarget(
-            name: "GrumpySqueezeApp",
-            dependencies: ["GrumpySqueezeCore"],
-            exclude: ["GrumpySqueeze.entitlements"],
+            name: "UkigumuSqueezeApp",
+            dependencies: ["UkigumuSqueezeCore"],
+            exclude: ["UkigumuSqueeze.entitlements"],
             resources: [.process("Resources")]
         ),
         .testTarget(
-            name: "GrumpySqueezeCoreTests",
-            dependencies: ["GrumpySqueezeCore"],
+            name: "UkigumuSqueezeCoreTests",
+            dependencies: ["UkigumuSqueezeCore"],
             path: "Tests/UnitTests"
         ),
         .testTarget(
-            name: "GrumpySqueezeIntegrationTests",
-            dependencies: ["GrumpySqueezeCore"],
+            name: "UkigumuSqueezeIntegrationTests",
+            dependencies: ["UkigumuSqueezeCore"],
             path: "Tests/IntegrationTests"
         ),
         .testTarget(
-            name: "GrumpySqueezeFixtureTests",
-            dependencies: ["GrumpySqueezeCore"],
+            name: "UkigumuSqueezeFixtureTests",
+            dependencies: ["UkigumuSqueezeCore"],
             path: "Tests/FixtureTests"
         ),
         .testTarget(
-            name: "GrumpySqueezePerformanceTests",
-            dependencies: ["GrumpySqueezeCore"],
+            name: "UkigumuSqueezePerformanceTests",
+            dependencies: ["UkigumuSqueezeCore"],
             path: "Tests/PerformanceTests"
         )
     ]

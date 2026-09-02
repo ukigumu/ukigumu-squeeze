@@ -1,6 +1,6 @@
 import XCTest
 
-class GrumpySqueezeUITestCase: XCTestCase {
+class UkigumuSqueezeUITestCase: XCTestCase {
     var app: XCUIApplication!
     var temporaryRoot: URL!
     var completionSentinel: URL!
@@ -43,14 +43,14 @@ class GrumpySqueezeUITestCase: XCTestCase {
     ) {
         app.launchArguments = ["-ui-testing"]
         app.launchEnvironment = [
-            "GRUMPY_SQUEEZE_TEST_INPUTS": inputs.map(\.path).joined(separator: "\n"),
-            "GRUMPY_SQUEEZE_TEST_FORMAT": format,
-            "GRUMPY_SQUEEZE_TEST_PRESERVE_METADATA": preserveMetadata ? "1" : "0",
-            "GRUMPY_SQUEEZE_TEST_EXPORT_JSON": exportJSON ? "1" : "0",
-            "GRUMPY_SQUEEZE_TEST_SENTINEL": completionSentinel.path
+            "UKIGUMU_SQUEEZE_TEST_INPUTS": inputs.map(\.path).joined(separator: "\n"),
+            "UKIGUMU_SQUEEZE_TEST_FORMAT": format,
+            "UKIGUMU_SQUEEZE_TEST_PRESERVE_METADATA": preserveMetadata ? "1" : "0",
+            "UKIGUMU_SQUEEZE_TEST_EXPORT_JSON": exportJSON ? "1" : "0",
+            "UKIGUMU_SQUEEZE_TEST_SENTINEL": completionSentinel.path
         ]
         if let destination {
-            app.launchEnvironment["GRUMPY_SQUEEZE_TEST_DESTINATION"] = destination.path
+            app.launchEnvironment["UKIGUMU_SQUEEZE_TEST_DESTINATION"] = destination.path
         }
         app.launch()
         XCTAssertTrue(app.buttons["compressButton"].waitForExistence(timeout: 5))

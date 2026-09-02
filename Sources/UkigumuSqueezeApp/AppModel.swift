@@ -1,6 +1,6 @@
 import AppKit
-#if canImport(GrumpySqueezeCore)
-import GrumpySqueezeCore
+#if canImport(UkigumuSqueezeCore)
+import UkigumuSqueezeCore
 #endif
 import Observation
 
@@ -29,15 +29,15 @@ final class AppModel {
         self.bookmarkStore = bookmarkStore
         let environment = ProcessInfo.processInfo.environment
         if ProcessInfo.processInfo.arguments.contains("-ui-testing") {
-            inputs = environment["GRUMPY_SQUEEZE_TEST_INPUTS"]?
+            inputs = environment["UKIGUMU_SQUEEZE_TEST_INPUTS"]?
                 .split(separator: "\n")
                 .map { URL(filePath: String($0)) } ?? []
-            destinationURL = environment["GRUMPY_SQUEEZE_TEST_DESTINATION"].map { URL(filePath: $0) }
-            if let format = environment["GRUMPY_SQUEEZE_TEST_FORMAT"].flatMap(OutputFormat.init(rawValue:)) {
+            destinationURL = environment["UKIGUMU_SQUEEZE_TEST_DESTINATION"].map { URL(filePath: $0) }
+            if let format = environment["UKIGUMU_SQUEEZE_TEST_FORMAT"].flatMap(OutputFormat.init(rawValue:)) {
                 outputFormat = format
             }
-            preserveMetadata = environment["GRUMPY_SQUEEZE_TEST_PRESERVE_METADATA"] != "0"
-            exportJSON = environment["GRUMPY_SQUEEZE_TEST_EXPORT_JSON"] == "1"
+            preserveMetadata = environment["UKIGUMU_SQUEEZE_TEST_PRESERVE_METADATA"] != "0"
+            exportJSON = environment["UKIGUMU_SQUEEZE_TEST_EXPORT_JSON"] == "1"
         } else {
             inputs = bookmarkStore.restoreInputs()
             destinationURL = bookmarkStore.restoreDestination()
@@ -146,7 +146,7 @@ final class AppModel {
                 self.activeBatchID = nil
                 self.isProcessing = false
                 if ProcessInfo.processInfo.arguments.contains("-ui-testing"),
-                   let sentinel = ProcessInfo.processInfo.environment["GRUMPY_SQUEEZE_TEST_SENTINEL"] {
+                   let sentinel = ProcessInfo.processInfo.environment["UKIGUMU_SQUEEZE_TEST_SENTINEL"] {
                     try? Data("\(completed.count)".utf8).write(to: URL(filePath: sentinel), options: .atomic)
                 }
             }
@@ -172,7 +172,7 @@ final class AppModel {
                 ? completed
                 : completed.filter { result in items.first(where: { $0.id == result.id })?.rootURL == root }
             try MetadataReport(results: relevant, options: options)
-                .writeAtomically(to: root.appending(path: "grumpy-squeeze-metadata.json"))
+                .writeAtomically(to: root.appending(path: "ukigumu-squeeze-metadata.json"))
         }
     }
 }

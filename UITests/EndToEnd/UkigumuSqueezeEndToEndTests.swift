@@ -1,7 +1,7 @@
 import ImageIO
 import XCTest
 
-final class GrumpySqueezeEndToEndTests: GrumpySqueezeUITestCase {
+final class UkigumuSqueezeEndToEndTests: UkigumuSqueezeUITestCase {
     func testCompressionWithoutDestination() throws {
         let source = try copyFixture("Sources/Synthetic/gradient.png", named: "nested/photo.png")
         launch(inputs: [temporaryRoot])
@@ -98,7 +98,7 @@ final class GrumpySqueezeEndToEndTests: GrumpySqueezeUITestCase {
         let destination = try makeDestination()
         launch(inputs: [source], destination: destination, exportJSON: true)
         compressAndWait(expectedCount: 1)
-        let json = destination.appending(path: "grumpy-squeeze-metadata.json")
+        let json = destination.appending(path: "ukigumu-squeeze-metadata.json")
         XCTAssertTrue(FileManager.default.fileExists(atPath: json.path))
         XCTAssertFalse(try String(contentsOf: json, encoding: .utf8).contains(temporaryRoot.path))
     }

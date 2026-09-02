@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import ImageIO
 import Testing
-@testable import GrumpySqueezeCore
+@testable import UkigumuSqueezeCore
 
 @Suite("Approved fixture corpus")
 struct FixtureTests {

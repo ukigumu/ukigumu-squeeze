@@ -1,7 +1,7 @@
 import Foundation
 import ImageIO
 import Testing
-@testable import GrumpySqueezeCore
+@testable import UkigumuSqueezeCore
 
 @Suite("Safe processing")
 struct ProcessingTests {
@@ -23,7 +23,7 @@ struct ProcessingTests {
         #expect(FileManager.default.fileExists(atPath: root.appending(path: "nested/photo.jpg").path))
         #expect(!FileManager.default.fileExists(atPath: source.path))
         let leftovers = try FileManager.default.contentsOfDirectory(atPath: source.deletingLastPathComponent().path)
-        #expect(!leftovers.contains { $0.hasPrefix(".grumpy-squeeze-") })
+        #expect(!leftovers.contains { $0.hasPrefix(".ukigumu-squeeze-") })
     }
 
     @Test("Destination leaves source untouched")

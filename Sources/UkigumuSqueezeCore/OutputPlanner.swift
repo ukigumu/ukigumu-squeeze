@@ -19,7 +19,7 @@ public struct OutputPlanner: Sendable {
             let outputRoot = options.destinationURL ?? image.rootURL
             let output = outputRoot.appending(path: relativeOutput)
             let key = output.standardizedFileURL.path.lowercased()
-            guard claimed.insert(key).inserted else { throw GrumpySqueezeError.collision(output) }
+            guard claimed.insert(key).inserted else { throw UkigumuSqueezeError.collision(output) }
 
             let backup = options.destinationURL == nil
                 ? image.rootURL.appending(path: "original").appending(path: image.relativePath)
@@ -43,7 +43,7 @@ public struct OutputPlanner: Sendable {
             if let conflict = contents.first(where: {
                 $0.lastPathComponent.lowercased() == "original" && $0.lastPathComponent != "original"
             }) {
-                throw GrumpySqueezeError.originalFolderConflict(conflict)
+                throw UkigumuSqueezeError.originalFolderConflict(conflict)
             }
         }
     }

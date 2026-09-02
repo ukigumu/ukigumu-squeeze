@@ -4,7 +4,7 @@ set -euo pipefail
 
 project_dir=${0:A:h:h}
 source_icon="$project_dir/icon.png"
-asset_dir="$project_dir/Sources/GrumpySqueezeApp/Resources/Assets.xcassets/AppIcon.appiconset"
+asset_dir="$project_dir/Sources/UkigumuSqueezeApp/Resources/Assets.xcassets/AppIcon.appiconset"
 platform_background="#405744"
 
 if ! command -v magick >/dev/null 2>&1; then
