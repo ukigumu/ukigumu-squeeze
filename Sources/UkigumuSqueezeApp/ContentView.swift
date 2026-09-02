@@ -1,5 +1,5 @@
-#if canImport(GrumpySqueezeCore)
-import GrumpySqueezeCore
+#if canImport(UkigumuSqueezeCore)
+import UkigumuSqueezeCore
 #endif
 import AppKit
 import SwiftUI
@@ -25,7 +25,7 @@ struct ContentView: View {
             footer
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .alert("Grumpy Squeeze", isPresented: Binding(
+        .alert("Ukigumu Squeeze", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
         )) {
@@ -43,7 +43,7 @@ struct ContentView: View {
             .frame(width: 42, height: 42)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Grumpy Squeeze")
+                Text("Ukigumu Squeeze")
                     .font(.title2.weight(.bold))
                 Text("Local image compression. Nothing leaves your Mac.")
                     .font(.subheadline)

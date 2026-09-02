@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import GrumpySqueezeCore
+@testable import UkigumuSqueezeCore
 
 final class PerformanceTests: XCTestCase {
     func testDiscoverFiveThousandFilesBaseline() throws {

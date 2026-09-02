@@ -1,7 +1,7 @@
 import Foundation
 import ImageIO
 import Testing
-@testable import GrumpySqueezeCore
+@testable import UkigumuSqueezeCore
 
 @Suite("Core rules")
 struct CoreTests {
@@ -30,7 +30,7 @@ struct CoreTests {
     func collisions() {
         let first = fixture(relativePath: "photo.jpg", format: .jpeg)
         let second = fixture(relativePath: "PHOTO.png", format: .png)
-        #expect(throws: GrumpySqueezeError.self) {
+        #expect(throws: UkigumuSqueezeError.self) {
             try OutputPlanner().plan(
                 images: [first, second],
                 options: ProcessingOptions(outputFormat: .webp, destinationURL: URL(filePath: "/tmp/output"))
@@ -123,7 +123,7 @@ struct DiscoveryTests {
         try FileManager.default.createDirectory(at: temporary.appending(path: "original"), withIntermediateDirectories: true)
         try makePNG(at: temporary.appending(path: "nested/valid.PNG"))
         try makePNG(at: temporary.appending(path: "original/ignored.png"))
-        try Data("{}".utf8).write(to: temporary.appending(path: "grumpy-squeeze-metadata.json"))
+        try Data("{}".utf8).write(to: temporary.appending(path: "ukigumu-squeeze-metadata.json"))
         try FileManager.default.createSymbolicLink(
             at: temporary.appending(path: "linked.png"),
             withDestinationURL: temporary.appending(path: "nested/valid.PNG")
@@ -152,7 +152,7 @@ struct DiscoveryTests {
 struct BookmarkTests {
     @Test("Selected roots and destination survive store recreation")
     func roundTrip() throws {
-        let suiteName = "GrumpySqueezeTests-\(UUID().uuidString)"
+        let suiteName = "UkigumuSqueezeTests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

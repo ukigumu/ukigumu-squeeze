@@ -9,7 +9,7 @@ The downloaded corpus is pinned by commit and SHA-256 in
   `tests/data/README.md`.
 - HEIC fixture: libheif fuzzing corpus. See `libheif-COPYING.txt`.
 - Multipage TIFF: Pillow test corpus, HPND license. See `Pillow-LICENSE.txt`.
-- Synthetic fixtures: generated for GrumpySqueeze and © 2026 Grumpy Software.
+- Synthetic fixtures: generated for UkigumuSqueeze and © 2026 Ukigumu.
 
 No fixture is downloaded during normal tests. `Scripts/update-fixtures.sh` is a
 manual development-only updater and refuses content whose checksum changes.

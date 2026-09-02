@@ -16,5 +16,5 @@ WebP output uses `libwebp-Xcode` 1.5.0, pinned exactly through Swift Package
 Manager. It packages the official libwebp encoder and is BSD 3-Clause licensed;
 the license is stored in `TestFixtures/Licenses/libwebp-COPYING.txt`. It is
 necessary because ImageIO on the development macOS reads WebP but does not
-advertise a WebP destination. Grumpy Squeeze calls the local `WebPEncodeRGBA`
+advertise a WebP destination. Ukigumu Squeeze calls the local `WebPEncodeRGBA`
 API directly and performs no network access at runtime.

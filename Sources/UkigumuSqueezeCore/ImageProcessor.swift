@@ -17,7 +17,7 @@ public actor ImageProcessor {
             try Task.checkCancellation()
             guard let source = CGImageSourceCreateWithURL(plan.image.sourceURL as CFURL, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-                throw GrumpySqueezeError.invalidImage(plan.image.sourceURL)
+                throw UkigumuSqueezeError.invalidImage(plan.image.sourceURL)
             }
             let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
             let metadataAvailable = !(properties ?? [:]).isEmpty
@@ -30,7 +30,7 @@ public actor ImageProcessor {
             )
             let resizedImage = try resize(image, to: targetSize)
             let temporary = plan.outputURL.deletingLastPathComponent()
-                .appending(path: ".grumpy-squeeze-\(UUID().uuidString).tmp")
+                .appending(path: ".ukigumu-squeeze-\(UUID().uuidString).tmp")
             defer { try? fileManager.removeItem(at: temporary) }
 
             try fileManager.createDirectory(at: temporary.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -101,7 +101,7 @@ public actor ImageProcessor {
               let destination = CGImageDestinationCreateWithURL(
                 url as CFURL, type, format == .tiff ? CGImageSourceGetCount(source) : 1, nil
               ) else {
-            throw GrumpySqueezeError.outputFormatUnavailable(format)
+            throw UkigumuSqueezeError.outputFormatUnavailable(format)
         }
         var properties: [CFString: Any] = [
             kCGImageDestinationLossyCompressionQuality: quality
@@ -112,7 +112,7 @@ public actor ImageProcessor {
         if format == .tiff {
             for index in 0..<CGImageSourceGetCount(source) {
                 guard let page = CGImageSourceCreateImageAtIndex(source, index, nil) else {
-                    throw GrumpySqueezeError.invalidImage(url)
+                    throw UkigumuSqueezeError.invalidImage(url)
                 }
                 let pageSize = ResolutionCalculator.dimensions(
                     sourceWidth: page.width,
@@ -133,7 +133,7 @@ public actor ImageProcessor {
             CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         }
         guard CGImageDestinationFinalize(destination) else {
-            throw GrumpySqueezeError.validationFailed(url)
+            throw UkigumuSqueezeError.validationFailed(url)
         }
     }
 
@@ -148,12 +148,12 @@ public actor ImageProcessor {
             space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
-            throw GrumpySqueezeError.validationFailed(URL(filePath: "resized-image"))
+            throw UkigumuSqueezeError.validationFailed(URL(filePath: "resized-image"))
         }
         context.interpolationQuality = .high
         context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
         guard let resized = context.makeImage() else {
-            throw GrumpySqueezeError.validationFailed(URL(filePath: "resized-image"))
+            throw UkigumuSqueezeError.validationFailed(URL(filePath: "resized-image"))
         }
         return resized
     }
@@ -168,7 +168,7 @@ public actor ImageProcessor {
               let type = CGImageSourceGetType(source),
               type as String == uti(for: expectedFormat) as String
                 || formatsEquivalent(type as String, expectedFormat) else {
-            throw GrumpySqueezeError.validationFailed(url)
+            throw UkigumuSqueezeError.validationFailed(url)
         }
     }
 
