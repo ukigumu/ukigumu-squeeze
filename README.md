@@ -10,8 +10,6 @@ Ukigumu Squeeze is a native macOS image compressor and converter by **Ukigumu**.
 
 Requires **macOS 14** or later.
 
-UI screenshots are TBD on a Mac. No captures exist yet under `Documentation/Release/UITests`, so the product icon above stands in for now.
-
 ## Features
 
 - Drop files and folders, or select them with the native file panel.
