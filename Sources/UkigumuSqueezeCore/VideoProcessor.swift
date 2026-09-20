@@ -3,32 +3,25 @@ import Foundation
 import UniformTypeIdentifiers
 
 public enum VideoPresetSelector: Sendable {
-    public static func preferredExportPresets(for preset: VideoPreset, customSize: Bool) -> [String] {
-        switch preset {
-        case .smallerFile:
-            return [
+    public static func preferredExportPresets(for profile: VideoEncodeProfile) -> [String] {
+        switch (profile.codec, profile.lean) {
+        case (.h264, .smaller):
+            [
                 AVAssetExportPresetLowQuality,
                 AVAssetExportPreset640x480,
                 AVAssetExportPreset960x540,
                 AVAssetExportPreset1280x720,
                 AVAssetExportPresetMediumQuality
             ]
-        case .fast1080p:
-            return customSize
-                ? [
-                    AVAssetExportPreset1920x1080,
-                    AVAssetExportPreset1280x720,
-                    AVAssetExportPresetHighestQuality,
-                    AVAssetExportPresetMediumQuality
-                ]
-                : [
-                    AVAssetExportPresetMediumQuality,
-                    AVAssetExportPreset1920x1080,
-                    AVAssetExportPreset1280x720,
-                    AVAssetExportPresetHighestQuality
-                ]
-        case .highQuality:
-            return [
+        case (.h264, .balanced):
+            [
+                AVAssetExportPresetMediumQuality,
+                AVAssetExportPreset1920x1080,
+                AVAssetExportPreset1280x720,
+                AVAssetExportPresetHighestQuality
+            ]
+        case (.hevc, _), (_, .higher):
+            [
                 AVAssetExportPresetHEVCHighestQuality,
                 AVAssetExportPresetHighestQuality,
                 AVAssetExportPreset1920x1080,
@@ -37,8 +30,8 @@ public enum VideoPresetSelector: Sendable {
         }
     }
 
-    public static func choose(preset: VideoPreset, customSize: Bool, compatible: [String]) -> String? {
-        preferredExportPresets(for: preset, customSize: customSize)
+    public static func choose(profile: VideoEncodeProfile, compatible: [String]) -> String? {
+        preferredExportPresets(for: profile)
             .first { compatible.contains($0) }
             ?? compatible.first {
                 $0 != AVAssetExportPresetPassthrough && $0 != AVAssetExportPresetAppleM4A
@@ -55,10 +48,12 @@ public actor VideoProcessor {
 
     public func process(
         _ plan: PlannedOutput,
-        options: ProcessingOptions
+        options: ProcessingOptions,
+        progress: (@Sendable (Double) -> Void)? = nil
     ) async -> ProcessingResult {
         do {
             try Task.checkCancellation()
+            progress?(0.02)
             let asset = AVURLAsset(url: plan.image.sourceURL)
             let videoTracks = try await asset.loadTracks(withMediaType: .video)
             guard let videoTrack = videoTracks.first else {
@@ -72,10 +67,11 @@ public actor VideoProcessor {
             let display = naturalSize.applying(transform)
             let sourceWidth = max(1, Int(abs(display.width).rounded()))
             let sourceHeight = max(1, Int(abs(display.height).rounded()))
+            let profile = options.videoProfile
             let targetSize = evenPixelSize(
-                options.videoPreset.dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
+                profile.dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
             )
-            let customSize = targetSize.width != sourceWidth || targetSize.height != sourceHeight
+            let resized = targetSize.width != sourceWidth || targetSize.height != sourceHeight
 
             let temporary = TemporaryOutput.url(adjacentTo: plan.outputURL)
             defer { try? fileManager.removeItem(at: temporary) }
@@ -88,20 +84,22 @@ public actor VideoProcessor {
                 naturalSize: naturalSize,
                 to: temporary,
                 format: plan.finalFormat,
-                preset: options.videoPreset,
+                profile: profile,
                 preserveMetadata: options.preserveMetadata,
                 targetSize: targetSize,
-                customSize: customSize
+                resized: resized,
+                progress: progress
             )
             try await validate(temporary, expectedFormat: plan.finalFormat)
             try Task.checkCancellation()
             let encodedSize = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize.map(Int64.init) ?? 0
             let outputSize = try await displaySize(of: temporary)
 
-            if !customSize, encodedSize >= plan.image.byteCount {
+            if !resized, encodedSize >= plan.image.byteCount {
                 if options.destinationURL != nil {
                     try fileManager.copyItem(at: plan.image.sourceURL, to: plan.outputURL)
                 }
+                progress?(1)
                 return ProcessingResult.success(
                     plan: plan, width: sourceWidth, height: sourceHeight,
                     finalBytes: plan.image.byteCount, metadataAvailable: !metadata.isEmpty,
@@ -110,6 +108,7 @@ public actor VideoProcessor {
             }
 
             try OutputCommitter.commit(temporary: temporary, plan: plan, fileManager: fileManager)
+            progress?(1)
             return ProcessingResult.success(
                 plan: plan, width: outputSize.width, height: outputSize.height,
                 finalBytes: encodedSize, metadataAvailable: !metadata.isEmpty,
@@ -130,14 +129,15 @@ public actor VideoProcessor {
         naturalSize: CGSize,
         to url: URL,
         format: MediaFormat,
-        preset: VideoPreset,
+        profile: VideoEncodeProfile,
         preserveMetadata: Bool,
         targetSize: PixelSize,
-        customSize: Bool
+        resized: Bool,
+        progress: (@Sendable (Double) -> Void)?
     ) async throws {
         let fileType = Self.fileType(for: format)
         let compatible = AVAssetExportSession.exportPresets(compatibleWith: asset)
-        let presets = VideoPresetSelector.preferredExportPresets(for: preset, customSize: customSize)
+        let presets = VideoPresetSelector.preferredExportPresets(for: profile)
             .filter { compatible.contains($0) }
         var lastError: Error = UkigumuSqueezeError.videoExportUnavailable
 
@@ -153,7 +153,7 @@ public actor VideoProcessor {
             if !preserveMetadata {
                 session.metadataItemFilter = .forSharing()
             }
-            if customSize {
+            if resized {
                 session.videoComposition = try await makeComposition(
                     videoTrack: videoTrack,
                     duration: duration,
@@ -164,7 +164,7 @@ public actor VideoProcessor {
             }
 
             do {
-                try await export(session, to: url)
+                try await export(session, to: url, progress: progress)
                 return
             } catch is CancellationError {
                 throw CancellationError()
@@ -175,27 +175,44 @@ public actor VideoProcessor {
         throw lastError
     }
 
-    private func export(_ session: AVAssetExportSession, to url: URL) async throws {
+    private func export(
+        _ session: AVAssetExportSession,
+        to url: URL,
+        progress: (@Sendable (Double) -> Void)?
+    ) async throws {
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                session.exportAsynchronously {
-                    switch session.status {
-                    case .completed:
-                        continuation.resume()
-                    case .cancelled:
-                        continuation.resume(throwing: CancellationError())
-                    case .failed:
-                        continuation.resume(
-                            throwing: session.error ?? UkigumuSqueezeError.validationFailed(url)
-                        )
-                    default:
-                        continuation.resume(throwing: UkigumuSqueezeError.validationFailed(url))
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        session.exportAsynchronously {
+                            switch session.status {
+                            case .completed:
+                                continuation.resume()
+                            case .cancelled:
+                                continuation.resume(throwing: CancellationError())
+                            case .failed:
+                                continuation.resume(
+                                    throwing: session.error ?? UkigumuSqueezeError.validationFailed(url)
+                                )
+                            default:
+                                continuation.resume(throwing: UkigumuSqueezeError.validationFailed(url))
+                            }
+                        }
                     }
                 }
+                group.addTask {
+                    while !Task.isCancelled {
+                        progress?(Double(min(max(session.progress, 0), 0.99)))
+                        try? await Task.sleep(nanoseconds: 150_000_000)
+                    }
+                }
+                try await group.next()
+                group.cancelAll()
             }
         } onCancel: {
             session.cancelExport()
         }
+        progress?(1)
     }
 
     private func makeComposition(

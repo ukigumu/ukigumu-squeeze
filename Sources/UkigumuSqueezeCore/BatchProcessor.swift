@@ -9,7 +9,8 @@ public actor BatchProcessor {
         plans: [PlannedOutput],
         options: ProcessingOptions,
         maximumConcurrentTasks: Int = max(2, min(ProcessInfo.processInfo.activeProcessorCount, 6)),
-        progress: @escaping @MainActor @Sendable (ProcessingResult) -> Void
+        progress: @escaping @MainActor @Sendable (ProcessingResult) -> Void,
+        itemProgress: (@MainActor @Sendable (UUID, Double) -> Void)? = nil
     ) async -> [ProcessingResult] {
         let imageProcessor = ImageProcessor()
         let videoProcessor = VideoProcessor()
@@ -23,11 +24,13 @@ public actor BatchProcessor {
                 for _ in 0..<min(concurrency, plans.count) {
                     if let plan = iterator.next() {
                         group.addTask {
-                            if plan.image.format.kind == .video {
-                                await videoProcessor.process(plan, options: options)
-                            } else {
-                                await imageProcessor.process(plan, options: options)
-                            }
+                            await Self.process(
+                                plan,
+                                options: options,
+                                imageProcessor: imageProcessor,
+                                videoProcessor: videoProcessor,
+                                itemProgress: itemProgress
+                            )
                         }
                     }
                 }
@@ -36,11 +39,13 @@ public actor BatchProcessor {
                     await progress(result)
                     if !Task.isCancelled, let plan = iterator.next() {
                         group.addTask {
-                            if plan.image.format.kind == .video {
-                                await videoProcessor.process(plan, options: options)
-                            } else {
-                                await imageProcessor.process(plan, options: options)
-                            }
+                            await Self.process(
+                                plan,
+                                options: options,
+                                imageProcessor: imageProcessor,
+                                videoProcessor: videoProcessor,
+                                itemProgress: itemProgress
+                            )
                         }
                     }
                 }
@@ -57,5 +62,27 @@ public actor BatchProcessor {
 
     public func cancel() {
         task?.cancel()
+    }
+
+    nonisolated private static func process(
+        _ plan: PlannedOutput,
+        options: ProcessingOptions,
+        imageProcessor: ImageProcessor,
+        videoProcessor: VideoProcessor,
+        itemProgress: (@MainActor @Sendable (UUID, Double) -> Void)?
+    ) async -> ProcessingResult {
+        await itemProgress?(plan.image.id, 0)
+        let result: ProcessingResult
+        if plan.image.format.kind == .video {
+            result = await videoProcessor.process(plan, options: options) { fraction in
+                Task { @MainActor in
+                    itemProgress?(plan.image.id, fraction)
+                }
+            }
+        } else {
+            result = await imageProcessor.process(plan, options: options)
+        }
+        await itemProgress?(plan.image.id, 1)
+        return result
     }
 }

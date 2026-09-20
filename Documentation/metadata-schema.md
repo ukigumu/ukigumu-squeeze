@@ -7,7 +7,9 @@
 - `date`: ISO-8601 timestamp
 - `quality`: number from 0 through 1
 - `selectedFormat`: `original`, `webp`, `jpeg`, `png`, `avif`, `heic`, `tiff`, `mp4`, or `mov`
-- `videoPreset`: `smallerFile`, `fast1080p`, or `highQuality`
+- `videoPreset`: `smallerFile`, `fast1080p`, `social`, `highQuality`, or `custom`
+- `videoResolutionCap`: `p720`, `p1080`, `p1440`, or `source` (used by Custom)
+- `videoQualityLean`: `smaller`, `balanced`, or `higher` (used by Custom)
 - `metadataPolicy`: `preserve-compatible` or `remove`
 - `usesDestination`: boolean
 - `summary`: total/status counts and byte totals

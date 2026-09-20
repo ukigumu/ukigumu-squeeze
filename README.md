@@ -18,8 +18,8 @@ Requires **macOS 14** or later.
 - Video input: MP4, MOV, M4V, plus AVI and MPEG when the container can be identified.
 - JPEG, PNG, AVIF, HEIC, and TIFF output through ImageIO when the encoder is available at runtime.
 - WebP output through the bundled, local libwebp 1.5.0 encoder.
-- Video presets modeled on HandBrake's simple choices: Smaller file (720p), Fast 1080p, and High quality. The tradeoff is size versus quality, not encoder knobs.
-- Photos still use the quality slider and resolution controls. Videos use the selected preset. Both share the same local queue, destination, and before/after sizes.
+- Video presets modeled on HandBrake's simple choices: Smaller File, Fast 1080p, Social, High Quality, and Custom. Each preset maps to codec, AAC audio, a resolution cap, and a size versus quality lean. Not a wall of encoder knobs.
+- Photos still use the quality slider and resolution controls. Videos use the selected preset. Both share the same local cancellable queue, per-item progress, destination, and before/after sizes.
 - Concurrent, cancellable processing with bounded structured concurrency.
 - Optional destination that leaves source files untouched.
 - Recoverable in-place writes through a lowercase `original` tree.
@@ -46,7 +46,38 @@ Requires **macOS 14** or later.
 | M4V | Yes | Keep original | macOS AVFoundation |
 | AVI / MPEG | Yes | Written as MP4 | Identified locally; remuxed to a writable container |
 
-ImageIO is queried at runtime rather than assuming that an encoder exists. WebP is decoded by ImageIO and encoded completely offline with libwebp 1.5.0, under its BSD 3-Clause license. The license text is in `TestFixtures/Licenses/libwebp-COPYING.txt`. Video uses the system AVFoundation export session on the same Mac. Named presets pick the size and quality tradeoff: Smaller file caps at 720p, Fast 1080p caps at 1080p, and High quality keeps the source resolution. Keep original leaves a writable video container as-is (MP4, MOV, M4V) and remaps AVI or MPEG to MP4. Choosing a photo format still compresses videos in their writable container. Choosing MP4 or MOV leaves photos on their photo path. See `Documentation/codecs.md` for the codec decision record.
+ImageIO is queried at runtime rather than assuming that an encoder exists. WebP is decoded by ImageIO and encoded completely offline with libwebp 1.5.0, under its BSD 3-Clause license. The license text is in `TestFixtures/Licenses/libwebp-COPYING.txt`. Video uses the system AVFoundation export session on the same Mac. Named presets pick codec, AAC audio, resolution cap, and size versus quality. Keep original leaves a writable video container as-is (MP4, MOV, M4V) and remaps AVI or MPEG to MP4. Choosing a photo format still compresses videos in their writable container. Choosing MP4 or MOV leaves photos on their photo path. See `Documentation/codecs.md` for the codec decision record.
+
+## Video presets
+
+These are HandBrake-style names, not a HandBrake clone. Squeeze stays a simple local queue.
+
+| Preset | Codec | Audio | Resolution cap | Size vs quality |
+| --- | --- | --- | --- | --- |
+| Smaller File | H.264 | AAC | 720p | Smallest |
+| Fast 1080p | H.264 | AAC | 1080p | Balanced |
+| Social | H.264 | AAC | 1080p | Small, shareable |
+| High Quality | HEVC when available | AAC | Source | Best look |
+| Custom | H.264 or HEVC from the lean | AAC | 720p, 1080p, 1440p, or source | Smaller, Balanced, or Higher |
+
+AVFoundation does not expose ffmpeg CRF. Quality leans map to system export presets (Low / Medium / High / HEVC High). Audio is AAC through the same local export session.
+
+### Try a sample MP4 or MOV
+
+The repo includes tiny local fixtures. They are not downloaded.
+
+```
+TestFixtures/Sources/Video/solid.mp4
+TestFixtures/Sources/Video/solid.mov
+TestFixtures/Sources/Video/hd.mp4
+```
+
+1. Open `UkigumuSqueeze.xcodeproj` and run the **UkigumuSqueeze** scheme.
+2. Drop `solid.mp4` or `solid.mov` onto the window. For a 1080p cap check, drop `hd.mp4`.
+3. Pick Smaller File, Fast 1080p, or Social. Choose a destination folder if you want the source left untouched.
+4. Press Compress. The queue shows Waiting / Encoding with a percent, then Done, plus before and after sizes.
+
+Automated coverage: `swift test` and the XCUITest `testVideoCompressionWithDestination`.
 
 ## Build and test
 

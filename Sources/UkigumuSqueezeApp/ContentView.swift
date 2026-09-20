@@ -164,10 +164,21 @@ struct ContentView: View {
                         .foregroundStyle(model.results[item.id] == nil ? .secondary : .primary)
                 }.width(70)
                 TableColumn("Status") { item in
-                    Label(statusLabel(for: item), systemImage: statusSymbol(for: item))
-                        .foregroundStyle(statusColor(for: item))
-                        .help(model.results[item.id]?.error ?? statusLabel(for: item))
-                }.width(110)
+                    if status(for: item) == .processing, let fraction = model.itemProgress[item.id] {
+                        HStack(spacing: 6) {
+                            ProgressView(value: fraction)
+                                .frame(width: 46)
+                            Text("\(Int(fraction * 100))%")
+                                .monospacedDigit()
+                                .font(.caption)
+                        }
+                        .help("Encoding")
+                    } else {
+                        Label(statusLabel(for: item), systemImage: statusSymbol(for: item))
+                            .foregroundStyle(statusColor(for: item))
+                            .help(model.results[item.id]?.error ?? statusLabel(for: item))
+                    }
+                }.width(120)
             }
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay {
@@ -203,6 +214,9 @@ struct ContentView: View {
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
                                                 .fixedSize(horizontal: false, vertical: true)
+                                            Text(recipe(for: preset))
+                                                .font(.caption2)
+                                                .foregroundStyle(.tertiary)
                                         }
                                         Spacer(minLength: 0)
                                     }
@@ -219,6 +233,20 @@ struct ContentView: View {
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("videoPreset-\(preset.rawValue)")
                             }
+                        }
+                        if model.videoPreset == .custom {
+                            Picker("Cap", selection: $model.videoResolutionCap) {
+                                ForEach(VideoResolutionCap.allCases, id: \.self) { cap in
+                                    Text(cap.title).tag(cap)
+                                }
+                            }
+                            .accessibilityIdentifier("videoCustomCapPicker")
+                            Picker("Quality", selection: $model.videoQualityLean) {
+                                ForEach(VideoQualityLean.allCases, id: \.self) { lean in
+                                    Text(lean.title).tag(lean)
+                                }
+                            }
+                            .accessibilityIdentifier("videoCustomLeanPicker")
                         }
                         VStack(spacing: 4) {
                             GeometryReader { geometry in
@@ -472,14 +500,27 @@ struct ContentView: View {
 
     private var videoTradeoffPosition: CGFloat {
         switch model.videoPreset {
-        case .smallerFile: 0.18
+        case .smallerFile: 0.16
+        case .social: 0.34
         case .fast1080p: 0.55
+        case .custom:
+            switch model.videoQualityLean {
+            case .smaller: 0.22
+            case .balanced: 0.55
+            case .higher: 0.88
+            }
         case .highQuality: 1
         }
     }
 
+    private func recipe(for preset: VideoPreset) -> String {
+        preset.profile(customCap: model.videoResolutionCap, customLean: model.videoQualityLean).recipe
+    }
+
     private func status(for item: DiscoveredImage) -> ItemStatus {
-        model.results[item.id]?.status ?? (model.isProcessing ? .processing : .pending)
+        if let result = model.results[item.id] { return result.status }
+        if model.itemProgress[item.id] != nil { return .processing }
+        return .pending
     }
 
     private func statusLabel(for item: DiscoveredImage) -> String {

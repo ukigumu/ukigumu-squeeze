@@ -20,14 +20,17 @@ advertise a WebP destination. Ukigumu Squeeze calls the local `WebPEncodeRGBA`
 API directly and performs no network access at runtime.
 
 Video compression uses AVFoundation `AVAssetExportSession` on the same Mac.
-No ffmpeg binary is bundled and no file is uploaded. The UI exposes three
-HandBrake-like presets instead of encoder knobs:
+No ffmpeg binary is bundled and no file is uploaded. The UI exposes HandBrake-like
+presets instead of encoder knobs. Each preset maps to concrete local settings:
 
-- Smaller file: lowest compatible export preset, fit within 1280x720
-- Fast 1080p: medium export preset, fit within 1920x1080
-- High quality: HEVC High when available, source resolution
+- Smaller File: H.264, AAC, Low export preset, fit within 1280x720
+- Fast 1080p: H.264, AAC, Medium export preset, fit within 1920x1080
+- Social: H.264, AAC, Low export preset, fit within 1920x1080, shareable
+- High Quality: HEVC High when available, AAC, source resolution
+- Custom: cap (720p / 1080p / 1440p / source) plus Smaller / Balanced / Higher
 
 Compatible system export presets are queried at runtime. AVI and MPEG can be
 discovered from their containers but are written as MP4 because those input
 containers are not writable through the system export session. Photo quality
-and photo resolution controls do not change video output.
+and photo resolution controls do not change video output. The queue reports
+per-item export progress from `AVAssetExportSession.progress`.

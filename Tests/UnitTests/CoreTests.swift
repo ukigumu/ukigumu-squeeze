@@ -171,37 +171,52 @@ struct CoreTests {
 
     @Test("Video presets expose a clear size versus quality tradeoff")
     func videoPresetTradeoffs() {
-        #expect(VideoPreset.smallerFile.title == "Smaller file")
+        #expect(VideoPreset.smallerFile.title == "Smaller File")
         #expect(VideoPreset.fast1080p.title == "Fast 1080p")
-        #expect(VideoPreset.highQuality.title == "High quality")
+        #expect(VideoPreset.social.title == "Social")
+        #expect(VideoPreset.highQuality.title == "High Quality")
+        #expect(VideoPreset.custom.title == "Custom")
         #expect(VideoPreset.smallerFile.dimensions(sourceWidth: 3840, sourceHeight: 2160) == PixelSize(width: 1280, height: 720))
         #expect(VideoPreset.fast1080p.dimensions(sourceWidth: 3840, sourceHeight: 2160) == PixelSize(width: 1920, height: 1080))
+        #expect(VideoPreset.social.dimensions(sourceWidth: 3840, sourceHeight: 2160) == PixelSize(width: 1920, height: 1080))
         #expect(VideoPreset.highQuality.dimensions(sourceWidth: 3840, sourceHeight: 2160) == PixelSize(width: 3840, height: 2160))
         #expect(VideoPreset.fast1080p.dimensions(sourceWidth: 1280, sourceHeight: 720) == PixelSize(width: 1280, height: 720))
+        #expect(
+            VideoPreset.custom.dimensions(
+                sourceWidth: 3840, sourceHeight: 2160, customCap: .p720, customLean: .smaller
+            ) == PixelSize(width: 1280, height: 720)
+        )
+        #expect(VideoPreset.smallerFile.profile().recipe.contains("H.264"))
+        #expect(VideoPreset.smallerFile.profile().audio == "AAC")
+        #expect(VideoPreset.highQuality.profile().codec == .hevc)
+        #expect(VideoPreset.social.profile().optimizeForSharing)
     }
 
     @Test("Video presets map to AVFoundation export presets")
     func videoPresets() {
         #expect(
             VideoPresetSelector.choose(
-                preset: .smallerFile,
-                customSize: false,
+                profile: VideoPreset.smallerFile.profile(),
                 compatible: ["AVAssetExportPresetLowQuality"]
             ) == "AVAssetExportPresetLowQuality"
         )
         #expect(
             VideoPresetSelector.choose(
-                preset: .highQuality,
-                customSize: false,
+                profile: VideoPreset.highQuality.profile(),
                 compatible: ["AVAssetExportPresetHighestQuality"]
             ) == "AVAssetExportPresetHighestQuality"
         )
         #expect(
             VideoPresetSelector.choose(
-                preset: .fast1080p,
-                customSize: true,
-                compatible: ["AVAssetExportPreset1920x1080"]
-            ) == "AVAssetExportPreset1920x1080"
+                profile: VideoPreset.fast1080p.profile(),
+                compatible: ["AVAssetExportPreset1920x1080", "AVAssetExportPresetMediumQuality"]
+            ) == "AVAssetExportPresetMediumQuality"
+        )
+        #expect(
+            VideoPresetSelector.choose(
+                profile: VideoPreset.social.profile(),
+                compatible: ["AVAssetExportPresetLowQuality"]
+            ) == "AVAssetExportPresetLowQuality"
         )
     }
 

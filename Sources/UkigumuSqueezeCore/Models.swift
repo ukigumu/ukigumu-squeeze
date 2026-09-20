@@ -106,16 +106,110 @@ public enum OutputFormat: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum VideoPreset: String, Codable, CaseIterable, Sendable {
-    case smallerFile
-    case fast1080p
-    case highQuality
+public enum VideoCodec: String, Codable, Sendable {
+    case h264
+    case hevc
+
+    public var displayName: String {
+        switch self {
+        case .h264: "H.264"
+        case .hevc: "HEVC"
+        }
+    }
+}
+
+public enum VideoResolutionCap: String, Codable, CaseIterable, Sendable {
+    case p720
+    case p1080
+    case p1440
+    case source
 
     public var title: String {
         switch self {
-        case .smallerFile: "Smaller file"
+        case .p720: "720p"
+        case .p1080: "1080p"
+        case .p1440: "1440p"
+        case .source: "Source"
+        }
+    }
+
+    public var pixelSize: PixelSize? {
+        switch self {
+        case .p720: PixelSize(width: 1280, height: 720)
+        case .p1080: PixelSize(width: 1920, height: 1080)
+        case .p1440: PixelSize(width: 2560, height: 1440)
+        case .source: nil
+        }
+    }
+}
+
+public enum VideoQualityLean: String, Codable, CaseIterable, Sendable {
+    case smaller
+    case balanced
+    case higher
+
+    public var title: String {
+        switch self {
+        case .smaller: "Smaller"
+        case .balanced: "Balanced"
+        case .higher: "Higher"
+        }
+    }
+}
+
+public struct VideoEncodeProfile: Sendable, Equatable {
+    public let codec: VideoCodec
+    public let audio: String
+    public let cap: VideoResolutionCap
+    public let lean: VideoQualityLean
+    public let optimizeForSharing: Bool
+
+    public init(
+        codec: VideoCodec,
+        audio: String = "AAC",
+        cap: VideoResolutionCap,
+        lean: VideoQualityLean,
+        optimizeForSharing: Bool
+    ) {
+        self.codec = codec
+        self.audio = audio
+        self.cap = cap
+        self.lean = lean
+        self.optimizeForSharing = optimizeForSharing
+    }
+
+    public var recipe: String {
+        "\(codec.displayName) · \(audio) · \(cap.title)"
+    }
+
+    public func dimensions(sourceWidth: Int, sourceHeight: Int) -> PixelSize {
+        guard let capSize = cap.pixelSize else {
+            return PixelSize(width: max(1, sourceWidth), height: max(1, sourceHeight))
+        }
+        return ResolutionCalculator.dimensions(
+            sourceWidth: sourceWidth,
+            sourceHeight: sourceHeight,
+            mode: .fit,
+            width: capSize.width,
+            height: capSize.height
+        )
+    }
+}
+
+public enum VideoPreset: String, Codable, CaseIterable, Sendable {
+    case smallerFile
+    case fast1080p
+    case social
+    case highQuality
+    case custom
+
+    public var title: String {
+        switch self {
+        case .smallerFile: "Smaller File"
         case .fast1080p: "Fast 1080p"
-        case .highQuality: "High quality"
+        case .social: "Social"
+        case .highQuality: "High Quality"
+        case .custom: "Custom"
         }
     }
 
@@ -123,45 +217,43 @@ public enum VideoPreset: String, Codable, CaseIterable, Sendable {
         switch self {
         case .smallerFile: "Smallest size. Caps at 720p."
         case .fast1080p: "Balanced size and quality. Caps at 1080p."
+        case .social: "Shareable MP4. Caps at 1080p."
         case .highQuality: "Best look. Keeps the source resolution."
+        case .custom: "Pick a cap and a size versus quality lean."
         }
     }
 
-    public var quality: Double {
+    public func profile(
+        customCap: VideoResolutionCap = .p1080,
+        customLean: VideoQualityLean = .balanced
+    ) -> VideoEncodeProfile {
         switch self {
-        case .smallerFile: 0.3
-        case .fast1080p: 0.55
-        case .highQuality: 0.9
+        case .smallerFile:
+            VideoEncodeProfile(codec: .h264, cap: .p720, lean: .smaller, optimizeForSharing: true)
+        case .fast1080p:
+            VideoEncodeProfile(codec: .h264, cap: .p1080, lean: .balanced, optimizeForSharing: true)
+        case .social:
+            VideoEncodeProfile(codec: .h264, cap: .p1080, lean: .smaller, optimizeForSharing: true)
+        case .highQuality:
+            VideoEncodeProfile(codec: .hevc, cap: .source, lean: .higher, optimizeForSharing: false)
+        case .custom:
+            VideoEncodeProfile(
+                codec: customLean == .higher ? .hevc : .h264,
+                cap: customCap,
+                lean: customLean,
+                optimizeForSharing: customLean == .smaller
+            )
         }
     }
 
-    public var maximumWidth: Int? {
-        switch self {
-        case .smallerFile: 1280
-        case .fast1080p: 1920
-        case .highQuality: nil
-        }
-    }
-
-    public var maximumHeight: Int? {
-        switch self {
-        case .smallerFile: 720
-        case .fast1080p: 1080
-        case .highQuality: nil
-        }
-    }
-
-    public func dimensions(sourceWidth: Int, sourceHeight: Int) -> PixelSize {
-        guard let maximumWidth, let maximumHeight else {
-            return PixelSize(width: max(1, sourceWidth), height: max(1, sourceHeight))
-        }
-        return ResolutionCalculator.dimensions(
-            sourceWidth: sourceWidth,
-            sourceHeight: sourceHeight,
-            mode: .fit,
-            width: maximumWidth,
-            height: maximumHeight
-        )
+    public func dimensions(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        customCap: VideoResolutionCap = .p1080,
+        customLean: VideoQualityLean = .balanced
+    ) -> PixelSize {
+        profile(customCap: customCap, customLean: customLean)
+            .dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
     }
 }
 
@@ -274,6 +366,8 @@ public struct ProcessingOptions: Sendable {
     public var resolutionWidth: Int
     public var resolutionHeight: Int
     public var videoPreset: VideoPreset
+    public var videoResolutionCap: VideoResolutionCap
+    public var videoQualityLean: VideoQualityLean
 
     public init(
         quality: Double = 0.8,
@@ -284,7 +378,9 @@ public struct ProcessingOptions: Sendable {
         resolutionMode: ResolutionMode = .original,
         resolutionWidth: Int = 1920,
         resolutionHeight: Int = 1080,
-        videoPreset: VideoPreset = .fast1080p
+        videoPreset: VideoPreset = .fast1080p,
+        videoResolutionCap: VideoResolutionCap = .p1080,
+        videoQualityLean: VideoQualityLean = .balanced
     ) {
         self.quality = min(max(quality, 0), 1)
         self.outputFormat = outputFormat
@@ -295,6 +391,12 @@ public struct ProcessingOptions: Sendable {
         self.resolutionWidth = max(1, resolutionWidth)
         self.resolutionHeight = max(1, resolutionHeight)
         self.videoPreset = videoPreset
+        self.videoResolutionCap = videoResolutionCap
+        self.videoQualityLean = videoQualityLean
+    }
+
+    public var videoProfile: VideoEncodeProfile {
+        videoPreset.profile(customCap: videoResolutionCap, customLean: videoQualityLean)
     }
 }
 
