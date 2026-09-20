@@ -400,8 +400,16 @@ public enum ProcessingErrorMessage: Sendable {
 
     public static func isPermissionFailure(_ error: Error) -> Bool {
         if isPermissionNSError(error as NSError) { return true }
-        if isOpaquePermissionMessage(rawMessage(error)) { return true }
+        if describesPermissionFailure(rawMessage(error)) { return true }
         return false
+    }
+
+    public static func describesPermissionFailure(_ message: String?) -> Bool {
+        let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return false }
+        if trimmed.contains(sandboxBlocked) { return true }
+        if trimmed.contains(FolderAccessPromptCopy.cancelled) { return false }
+        return isOpaquePermissionMessage(trimmed)
     }
 
     private static func rawMessage(_ error: Error) -> String {
@@ -582,6 +590,7 @@ public enum UkigumuSqueezeError: LocalizedError {
     case collision(URL)
     case originalFolderConflict(URL)
     case validationFailed(URL)
+    case folderAccessCancelled
 
     public var errorDescription: String? {
         switch self {
@@ -595,6 +604,7 @@ public enum UkigumuSqueezeError: LocalizedError {
         case .collision(let url): "Output already exists: \(url.path)"
         case .originalFolderConflict(let url): "An Original folder conflicts with the required original folder: \(url.path)"
         case .validationFailed(let url): "The encoded file could not be validated: \(url.lastPathComponent)"
+        case .folderAccessCancelled: FolderAccessPromptCopy.cancelled
         }
     }
 }

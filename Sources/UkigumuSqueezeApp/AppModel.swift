@@ -54,6 +54,7 @@ final class AppModel {
         } else {
             inputs = bookmarkStore.restoreInputs()
             destinationURL = bookmarkStore.restoreDestination()
+            _ = bookmarkStore.restoreGrantedFolders()
         }
         refresh()
     }
@@ -184,19 +185,42 @@ final class AppModel {
             let planner = OutputPlanner()
             if destinationURL == nil { try planner.validateOriginalFolders(for: items) }
             let plans = try planner.plan(images: items, options: options)
-            Task {
-                let completed = await batchProcessor.process(
-                    plans: plans,
-                    options: options,
-                    progress: { [weak self] result in
-                        guard self?.activeBatchID == batchID else { return }
-                        self?.results[result.id] = result
-                    },
-                    itemProgress: { [weak self] id, fraction in
-                        guard self?.activeBatchID == batchID else { return }
-                        self?.itemProgress[id] = fraction
-                    }
-                )
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let cache = FolderAccessDecisionCache()
+                let prepared = await self.collectFolderAccess(for: plans, destination: options.destinationURL, cache: cache)
+                for result in prepared.failed {
+                    guard self.activeBatchID == batchID else { return }
+                    self.results[result.id] = result
+                }
+                let processed: [ProcessingResult]
+                if prepared.process.isEmpty {
+                    processed = []
+                } else {
+                    processed = await self.batchProcessor.process(
+                        plans: prepared.process,
+                        options: options,
+                        progress: { result in
+                            guard self.activeBatchID == batchID else { return }
+                            self.results[result.id] = result
+                        },
+                        itemProgress: { id, fraction in
+                            guard self.activeBatchID == batchID else { return }
+                            self.itemProgress[id] = fraction
+                        },
+                        recoverAccess: { [weak self] plan in
+                            guard let self else { return false }
+                            return await self.recoverFolderAccess(
+                                for: plan,
+                                destination: options.destinationURL,
+                                cache: cache
+                            )
+                        }
+                    )
+                }
+                let completed = (prepared.failed + processed).sorted {
+                    $0.originalRelativePath.localizedStandardCompare($1.originalRelativePath) == .orderedAscending
+                }
                 guard self.activeBatchID == batchID else { return }
                 if options.exportJSON {
                     do { try self.writeReports(completed, options: options) }
@@ -240,7 +264,107 @@ final class AppModel {
         }
         inputs = bookmarkStore.resolveInputs(inputs)
         destinationURL = bookmarkStore.resolveDestination(destinationURL)
+        _ = bookmarkStore.restoreGrantedFolders()
         items = FileDiscovery().discover(at: inputs, excluding: destinationURL)
+    }
+
+    private func collectFolderAccess(
+        for plans: [PlannedOutput],
+        destination: URL?,
+        cache: FolderAccessDecisionCache
+    ) async -> (process: [PlannedOutput], failed: [ProcessingResult]) {
+        guard !isUITesting else { return (plans, []) }
+        let needed = SandboxAccessProbe.foldersNeedingGrant(
+            plans: plans,
+            destination: destination,
+            covered: bookmarkStore.accessedURLs
+        )
+        for folder in needed {
+            if let granted = await requestFolderAccess(for: folder, cache: cache) {
+                adoptGrantedFolder(granted, suggested: folder)
+            }
+        }
+        var process: [PlannedOutput] = []
+        var failed: [ProcessingResult] = []
+        for plan in plans {
+            let required = SandboxAccessProbe.requiredFolders(for: plan, destination: destination)
+            if required.contains(where: { cache.isDenied($0) }) {
+                failed.append(
+                    ProcessingResult.failure(
+                        plan: plan,
+                        status: .error,
+                        error: FolderAccessPromptCopy.cancelled
+                    )
+                )
+            } else {
+                process.append(plan)
+            }
+        }
+        return (process, failed)
+    }
+
+    private func recoverFolderAccess(
+        for plan: PlannedOutput,
+        destination: URL?,
+        cache: FolderAccessDecisionCache
+    ) async -> Bool {
+        guard !isUITesting else { return false }
+        let needed = SandboxAccessProbe.foldersNeedingGrant(
+            plans: [plan],
+            destination: destination,
+            covered: bookmarkStore.accessedURLs
+        )
+        if needed.isEmpty { return true }
+        var grantedAny = false
+        for folder in needed {
+            if let granted = await requestFolderAccess(for: folder, cache: cache) {
+                adoptGrantedFolder(granted, suggested: folder)
+                grantedAny = true
+            }
+        }
+        return grantedAny
+    }
+
+    private func requestFolderAccess(for folder: URL, cache: FolderAccessDecisionCache) async -> URL? {
+        await cache.decision(for: folder) { suggested in
+            await MainActor.run {
+                self.presentFolderAccessPanel(
+                    suggested: suggested,
+                    treatingAsDestination: self.isDestinationFolder(suggested)
+                )
+            }
+        }
+    }
+
+    private func presentFolderAccessPanel(suggested: URL, treatingAsDestination: Bool) -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = treatingAsDestination
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = suggested
+        panel.message = FolderAccessPromptCopy.message
+        panel.prompt = FolderAccessPromptCopy.confirm
+        panel.title = "Ukigumu Squeeze"
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        bookmarkStore.access(url)
+        return url
+    }
+
+    private func isDestinationFolder(_ url: URL) -> Bool {
+        guard let destinationURL else { return false }
+        return destinationURL.standardizedFileURL.path == url.standardizedFileURL.path
+    }
+
+    private func adoptGrantedFolder(_ url: URL, suggested: URL) {
+        bookmarkStore.access(url)
+        do { try bookmarkStore.rememberGrantedFolder(url) }
+        catch { errorMessage = error.localizedDescription }
+        if isDestinationFolder(suggested) || isDestinationFolder(url) {
+            destinationURL = url
+            do { try bookmarkStore.saveDestination(url) }
+            catch { errorMessage = error.localizedDescription }
+        }
     }
 
     private var isUITesting: Bool {

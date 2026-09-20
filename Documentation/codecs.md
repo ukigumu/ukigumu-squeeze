@@ -48,5 +48,10 @@ access on the source, folder root, destination, and `original/` paths for the
 whole `AVAssetExportSession` lifetime, including `exportAsynchronously`.
 Bookmarks are resolved before `AVURLAsset` is created. The encode temp is
 written inside the app container, then moved to the destination under the same
-scoped access. Sandbox permission errors surface as a re-choose message and
-keep the system detail.
+scoped access.
+
+If a needed folder is not already covered, or encode fails with a sandbox
+permission error, the app shows the native open panel once per folder root
+with the copy "Ukigumu Squeeze needs access to this folder to compress videos
+locally." A grant is bookmarked and encode retries. Cancelling the panel
+leaves a clear folder-access error instead of "You don't have permission."
