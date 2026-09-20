@@ -41,14 +41,16 @@ public enum MediaFormat: String, Codable, CaseIterable, Sendable {
         if let image = ImageFormat.from(extension: value) {
             return MediaFormat(image)
         }
+        // Explicit returns: Swift 6 on Xcode 26 cannot infer implicit
+        // member types after an earlier return in the same function.
         switch value.lowercased() {
-        case "mp4": .mp4
-        case "mov", "qt": .mov
-        case "m4v": .m4v
-        case "avi": .avi
-        case "mpg", "mpeg", "mpe", "m2v": .mpeg
-        case "3gp", "3gpp": .mp4
-        default: nil
+        case "mp4": return .mp4
+        case "mov", "qt": return .mov
+        case "m4v": return .m4v
+        case "avi": return .avi
+        case "mpg", "mpeg", "mpe", "m2v": return .mpeg
+        case "3gp", "3gpp": return .mp4
+        default: return nil
         }
     }
 
