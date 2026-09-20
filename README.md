@@ -87,7 +87,7 @@ TestFixtures/Sources/Video/hd.mp4
 1. Open `UkigumuSqueeze.xcodeproj` and run the **UkigumuSqueeze** scheme.
 2. Drop `solid.mp4` or `solid.mov` onto the window. For a 1080p cap check, drop `hd.mp4`.
 3. Pick Smaller File, Fast 1080p, or Social. The Format column shows MOV to MP4 for those H.264 presets. Choose a destination folder if you want the source left untouched.
-4. Press Compress. The queue shows Waiting / Encoding with a percent, then Done, plus before and after sizes. If a row fails, Status shows the export error, not only "Error".
+4. Press Compress. The queue shows Waiting / Encoding with a percent, then Done, plus before and after sizes. If a row fails, Status stays "Error" and a subtitle under it shows `ProcessingResult.error` (the export session failure). Click the row or the info button to open the same string in an alert. Hover on the info button also shows it.
 
 Automated coverage: `swift test` and the XCUITest `testVideoCompressionWithDestination`.
 

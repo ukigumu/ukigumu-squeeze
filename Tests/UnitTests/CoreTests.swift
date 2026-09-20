@@ -164,15 +164,17 @@ struct CoreTests {
         #expect(OutputFormat.mov.resolvedFormat(for: .mp4, videoProfile: VideoPreset.highQuality.profile()) == .mp4)
     }
 
-    @Test("Error status shows a useful label when the message is missing")
+    @Test("Error status keeps Error as the title and always has a subtitle")
     func errorDisplay() throws {
-        #expect(ItemStatus.error.displayLabel(error: nil) == "Export failed")
-        #expect(ItemStatus.error.displayLabel(error: "   ") == "Export failed")
+        #expect(ItemStatus.error.displayLabel() == "Error")
+        #expect(ItemStatus.error.displayDetail(error: nil) == "Export failed")
+        #expect(ItemStatus.error.displayDetail(error: "   ") == "Export failed")
         #expect(
-            ItemStatus.error.displayLabel(error: "No compatible local video export preset is available")
+            ItemStatus.error.displayDetail(error: "No compatible local video export preset is available")
                 == "No compatible local video export preset is available"
         )
-        #expect(ItemStatus.completed.displayLabel(error: "ignored") == "Done")
+        #expect(ItemStatus.completed.displayLabel() == "Done")
+        #expect(ItemStatus.completed.displayDetail(error: "ignored") == nil)
         #expect(!ProcessingErrorMessage.fromFailure(UkigumuSqueezeError.videoExportUnavailable).isEmpty)
         #expect(
             ProcessingErrorMessage.fromFailure(UkigumuSqueezeError.videoExportIncompatible(.mov))
@@ -188,7 +190,15 @@ struct CoreTests {
         )
         let missing = ProcessingResult.failure(plan: plan, status: .error, error: nil)
         #expect(missing.error == "Export failed")
-        #expect(missing.status.displayLabel(error: missing.error) == "Export failed")
+        #expect(missing.statusTitle == "Error")
+        #expect(missing.statusDetail == "Export failed")
+        let explained = ProcessingResult.failure(
+            plan: plan,
+            status: .error,
+            error: "The operation could not be completed"
+        )
+        #expect(explained.statusTitle == "Error")
+        #expect(explained.statusDetail == "The operation could not be completed")
     }
 
     @Test("Video format selection leaves photos unchanged")

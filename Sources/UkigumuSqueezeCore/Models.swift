@@ -359,17 +359,22 @@ public enum ResolutionCalculator {
 public enum ItemStatus: String, Codable, Sendable {
     case pending, processing, completed, noImprovement, cancelled, error
 
-    public func displayLabel(error: String? = nil) -> String {
+    public func displayLabel() -> String {
         switch self {
         case .pending: "Waiting"
         case .processing: "Encoding"
         case .completed: "Done"
         case .noImprovement: "No change"
         case .cancelled: "Cancelled"
-        case .error:
-            let detail = error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return detail.isEmpty ? "Export failed" : detail
+        case .error: "Error"
         }
+    }
+
+    /// Visible queue subtitle. Always non-empty for `.error` so the table never shows a bare Error row.
+    public func displayDetail(error: String?) -> String? {
+        guard self == .error else { return nil }
+        let detail = error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return detail.isEmpty ? "Export failed" : detail
     }
 }
 
@@ -485,6 +490,9 @@ public struct ProcessingResult: Identifiable, Encodable, Sendable {
         originalBytes == 0 ? 0 : Double(bytesSaved) / Double(originalBytes) * 100
     }
 
+    public var statusTitle: String { status.displayLabel() }
+    public var statusDetail: String? { status.displayDetail(error: error) }
+
     enum CodingKeys: String, CodingKey {
         case originalRelativePath, finalRelativePath, originalName, finalName
         case originalFormat, finalFormat, width, height, originalBytes, finalBytes
@@ -570,7 +578,7 @@ extension ProcessingResult {
         let resolvedError: String?
         switch status {
         case .error:
-            resolvedError = (trimmed?.isEmpty == false) ? trimmed : ItemStatus.error.displayLabel()
+            resolvedError = (trimmed?.isEmpty == false) ? trimmed : ItemStatus.error.displayDetail(error: nil)
         default:
             resolvedError = (trimmed?.isEmpty == false) ? trimmed : nil
         }
