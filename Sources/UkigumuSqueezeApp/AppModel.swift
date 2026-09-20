@@ -17,6 +17,7 @@ final class AppModel {
     var resolutionMode = ResolutionMode.original
     var resolutionWidth = 1920
     var resolutionHeight = 1080
+    var videoPreset = VideoPreset.fast1080p
     var destinationURL: URL?
     var isProcessing = false
     var errorMessage: String?
@@ -35,6 +36,9 @@ final class AppModel {
             destinationURL = environment["UKIGUMU_SQUEEZE_TEST_DESTINATION"].map { URL(filePath: $0) }
             if let format = environment["UKIGUMU_SQUEEZE_TEST_FORMAT"].flatMap(OutputFormat.init(rawValue:)) {
                 outputFormat = format
+            }
+            if let preset = environment["UKIGUMU_SQUEEZE_TEST_VIDEO_PRESET"].flatMap(VideoPreset.init(rawValue:)) {
+                videoPreset = preset
             }
             preserveMetadata = environment["UKIGUMU_SQUEEZE_TEST_PRESERVE_METADATA"] != "0"
             exportJSON = environment["UKIGUMU_SQUEEZE_TEST_EXPORT_JSON"] == "1"
@@ -127,7 +131,8 @@ final class AppModel {
             destinationURL: destinationURL,
             resolutionMode: resolutionMode,
             resolutionWidth: resolutionWidth,
-            resolutionHeight: resolutionHeight
+            resolutionHeight: resolutionHeight,
+            videoPreset: videoPreset
         )
         do {
             let planner = OutputPlanner()

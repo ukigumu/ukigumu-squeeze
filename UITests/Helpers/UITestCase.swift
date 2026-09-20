@@ -38,6 +38,7 @@ class UkigumuSqueezeUITestCase: XCTestCase {
         inputs: [URL],
         destination: URL? = nil,
         format: String = "original",
+        videoPreset: String = "fast1080p",
         preserveMetadata: Bool = true,
         exportJSON: Bool = false
     ) {
@@ -45,6 +46,7 @@ class UkigumuSqueezeUITestCase: XCTestCase {
         app.launchEnvironment = [
             "UKIGUMU_SQUEEZE_TEST_INPUTS": inputs.map(\.path).joined(separator: "\n"),
             "UKIGUMU_SQUEEZE_TEST_FORMAT": format,
+            "UKIGUMU_SQUEEZE_TEST_VIDEO_PRESET": videoPreset,
             "UKIGUMU_SQUEEZE_TEST_PRESERVE_METADATA": preserveMetadata ? "1" : "0",
             "UKIGUMU_SQUEEZE_TEST_EXPORT_JSON": exportJSON ? "1" : "0",
             "UKIGUMU_SQUEEZE_TEST_SENTINEL": completionSentinel.path

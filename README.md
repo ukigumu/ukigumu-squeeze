@@ -4,7 +4,7 @@
   <img src="icon.png" alt="Ukigumu Squeeze icon" width="160">
 </p>
 
-Ukigumu Squeeze is a native macOS photo and video compressor by **Ukigumu**. Drop files or folders onto the window, choose a format and quality, and write smaller files without sending anything off your Mac.
+Ukigumu Squeeze is a native macOS photo and video compressor by **Ukigumu**. Drop files or folders onto the window, choose a photo quality or a video preset, and write smaller files without sending anything off your Mac.
 
 **Privacy is local only.** There is no account, no telemetry, no analytics, no uploads, and no network requests. Photos and videos are discovered, encoded, and written on the machine that runs the app.
 
@@ -18,7 +18,8 @@ Requires **macOS 14** or later.
 - Video input: MP4, MOV, M4V, plus AVI and MPEG when the container can be identified.
 - JPEG, PNG, AVIF, HEIC, and TIFF output through ImageIO when the encoder is available at runtime.
 - WebP output through the bundled, local libwebp 1.5.0 encoder.
-- MP4 and MOV output through local AVFoundation export presets. Quality uses Low / Medium / High (HEVC when available). The same quality, resolution, destination, and before/after size flow as photos.
+- Video presets modeled on HandBrake's simple choices: Smaller file (720p), Fast 1080p, and High quality. The tradeoff is size versus quality, not encoder knobs.
+- Photos still use the quality slider and resolution controls. Videos use the selected preset. Both share the same local queue, destination, and before/after sizes.
 - Concurrent, cancellable processing with bounded structured concurrency.
 - Optional destination that leaves source files untouched.
 - Recoverable in-place writes through a lowercase `original` tree.
@@ -45,7 +46,7 @@ Requires **macOS 14** or later.
 | M4V | Yes | Keep original | macOS AVFoundation |
 | AVI / MPEG | Yes | Written as MP4 | Identified locally; remuxed to a writable container |
 
-ImageIO is queried at runtime rather than assuming that an encoder exists. WebP is decoded by ImageIO and encoded completely offline with libwebp 1.5.0, under its BSD 3-Clause license. The license text is in `TestFixtures/Licenses/libwebp-COPYING.txt`. Video uses the system AVFoundation export session on the same Mac. Keep original leaves a writable video container as-is (MP4, MOV, M4V) and remaps AVI or MPEG to MP4. Choosing a photo format still compresses videos in their writable container. Choosing MP4 or MOV leaves photos on their photo path. See `Documentation/codecs.md` for the codec decision record.
+ImageIO is queried at runtime rather than assuming that an encoder exists. WebP is decoded by ImageIO and encoded completely offline with libwebp 1.5.0, under its BSD 3-Clause license. The license text is in `TestFixtures/Licenses/libwebp-COPYING.txt`. Video uses the system AVFoundation export session on the same Mac. Named presets pick the size and quality tradeoff: Smaller file caps at 720p, Fast 1080p caps at 1080p, and High quality keeps the source resolution. Keep original leaves a writable video container as-is (MP4, MOV, M4V) and remaps AVI or MPEG to MP4. Choosing a photo format still compresses videos in their writable container. Choosing MP4 or MOV leaves photos on their photo path. See `Documentation/codecs.md` for the codec decision record.
 
 ## Build and test
 
@@ -61,7 +62,7 @@ swift test
 
 That command runs the unit, integration, fixture, and performance test targets defined in `Package.swift`. XCUITests live in the Xcode project and need a Mac GUI session.
 
-After launch, drop photos, videos, or folders (or use Choose files or folders), set quality / format / optional destination, then Compress. The queue shows before and after sizes. Show in Finder opens the written files. Nothing is uploaded.
+After launch, drop photos, videos, or folders (or use Choose files or folders). Pick a video preset or photo quality, set an optional destination, then Compress. The queue shows each file's status and before/after size. Show in Finder opens the written files. Nothing is uploaded.
 
 ## File safety
 

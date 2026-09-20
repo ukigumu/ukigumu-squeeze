@@ -106,6 +106,65 @@ public enum OutputFormat: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum VideoPreset: String, Codable, CaseIterable, Sendable {
+    case smallerFile
+    case fast1080p
+    case highQuality
+
+    public var title: String {
+        switch self {
+        case .smallerFile: "Smaller file"
+        case .fast1080p: "Fast 1080p"
+        case .highQuality: "High quality"
+        }
+    }
+
+    public var tradeoff: String {
+        switch self {
+        case .smallerFile: "Smallest size. Caps at 720p."
+        case .fast1080p: "Balanced size and quality. Caps at 1080p."
+        case .highQuality: "Best look. Keeps the source resolution."
+        }
+    }
+
+    public var quality: Double {
+        switch self {
+        case .smallerFile: 0.3
+        case .fast1080p: 0.55
+        case .highQuality: 0.9
+        }
+    }
+
+    public var maximumWidth: Int? {
+        switch self {
+        case .smallerFile: 1280
+        case .fast1080p: 1920
+        case .highQuality: nil
+        }
+    }
+
+    public var maximumHeight: Int? {
+        switch self {
+        case .smallerFile: 720
+        case .fast1080p: 1080
+        case .highQuality: nil
+        }
+    }
+
+    public func dimensions(sourceWidth: Int, sourceHeight: Int) -> PixelSize {
+        guard let maximumWidth, let maximumHeight else {
+            return PixelSize(width: max(1, sourceWidth), height: max(1, sourceHeight))
+        }
+        return ResolutionCalculator.dimensions(
+            sourceWidth: sourceWidth,
+            sourceHeight: sourceHeight,
+            mode: .fit,
+            width: maximumWidth,
+            height: maximumHeight
+        )
+    }
+}
+
 public enum ResolutionMode: String, Codable, CaseIterable, Sendable {
     case original
     case percent90
@@ -214,6 +273,7 @@ public struct ProcessingOptions: Sendable {
     public var resolutionMode: ResolutionMode
     public var resolutionWidth: Int
     public var resolutionHeight: Int
+    public var videoPreset: VideoPreset
 
     public init(
         quality: Double = 0.8,
@@ -223,7 +283,8 @@ public struct ProcessingOptions: Sendable {
         destinationURL: URL? = nil,
         resolutionMode: ResolutionMode = .original,
         resolutionWidth: Int = 1920,
-        resolutionHeight: Int = 1080
+        resolutionHeight: Int = 1080,
+        videoPreset: VideoPreset = .fast1080p
     ) {
         self.quality = min(max(quality, 0), 1)
         self.outputFormat = outputFormat
@@ -233,6 +294,7 @@ public struct ProcessingOptions: Sendable {
         self.resolutionMode = resolutionMode
         self.resolutionWidth = max(1, resolutionWidth)
         self.resolutionHeight = max(1, resolutionHeight)
+        self.videoPreset = videoPreset
     }
 }
 

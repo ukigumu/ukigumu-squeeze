@@ -47,6 +47,7 @@ public struct MetadataReport: Encodable, Sendable {
     public let resolutionMode: ResolutionMode
     public let resolutionWidth: Int
     public let resolutionHeight: Int
+    public let videoPreset: VideoPreset
     public let metadataPolicy: String
     public let usesDestination: Bool
     public let summary: BatchSummary
@@ -61,6 +62,7 @@ public struct MetadataReport: Encodable, Sendable {
         resolutionMode = options.resolutionMode
         resolutionWidth = options.resolutionWidth
         resolutionHeight = options.resolutionHeight
+        videoPreset = options.videoPreset
         metadataPolicy = options.preserveMetadata ? "preserve-compatible" : "remove"
         usesDestination = options.destinationURL != nil
         summary = BatchSummary(results: results)

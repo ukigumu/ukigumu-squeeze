@@ -98,6 +98,7 @@ struct CoreTests {
         let json = String(decoding: data, as: UTF8.self)
         #expect(json.contains("\"bytesSaved\":25"))
         #expect(json.contains("\"percentageSaved\":25"))
+        #expect(json.contains("\"videoPreset\":\"fast1080p\""))
         #expect(!json.contains("/Users/"))
     }
 
@@ -168,28 +169,39 @@ struct CoreTests {
         #expect(VideoContainerSniffer.format(header: avi) == .avi)
     }
 
-    @Test("Video quality maps to AVFoundation export presets")
+    @Test("Video presets expose a clear size versus quality tradeoff")
+    func videoPresetTradeoffs() {
+        #expect(VideoPreset.smallerFile.title == "Smaller file")
+        #expect(VideoPreset.fast1080p.title == "Fast 1080p")
+        #expect(VideoPreset.highQuality.title == "High quality")
+        #expect(VideoPreset.smallerFile.dimensions(sourceWidth: 3840, sourceHeight: 2160) == PixelSize(width: 1280, height: 720))
+        #expect(VideoPreset.fast1080p.dimensions(sourceWidth: 3840, sourceHeight: 2160) == PixelSize(width: 1920, height: 1080))
+        #expect(VideoPreset.highQuality.dimensions(sourceWidth: 3840, sourceHeight: 2160) == PixelSize(width: 3840, height: 2160))
+        #expect(VideoPreset.fast1080p.dimensions(sourceWidth: 1280, sourceHeight: 720) == PixelSize(width: 1280, height: 720))
+    }
+
+    @Test("Video presets map to AVFoundation export presets")
     func videoPresets() {
         #expect(
             VideoPresetSelector.choose(
-                quality: 0.2,
+                preset: .smallerFile,
                 customSize: false,
                 compatible: ["AVAssetExportPresetLowQuality"]
             ) == "AVAssetExportPresetLowQuality"
         )
         #expect(
             VideoPresetSelector.choose(
-                quality: 0.9,
+                preset: .highQuality,
                 customSize: false,
                 compatible: ["AVAssetExportPresetHighestQuality"]
             ) == "AVAssetExportPresetHighestQuality"
         )
         #expect(
             VideoPresetSelector.choose(
-                quality: 0.5,
+                preset: .fast1080p,
                 customSize: true,
-                compatible: ["AVAssetExportPresetHighestQuality"]
-            ) == "AVAssetExportPresetHighestQuality"
+                compatible: ["AVAssetExportPreset1920x1080"]
+            ) == "AVAssetExportPreset1920x1080"
         )
     }
 

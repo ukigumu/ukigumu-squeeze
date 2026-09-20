@@ -3,33 +3,31 @@ import Foundation
 import UniformTypeIdentifiers
 
 public enum VideoPresetSelector: Sendable {
-    public static func preferredPresets(quality: Double, customSize: Bool) -> [String] {
-        if customSize {
-            return [
-                AVAssetExportPresetHEVCHighestQuality,
-                AVAssetExportPresetHighestQuality,
-                AVAssetExportPreset1920x1080,
-                AVAssetExportPreset1280x720,
-                AVAssetExportPreset960x540,
-                AVAssetExportPreset640x480,
-                AVAssetExportPresetMediumQuality
-            ]
-        }
-        switch quality {
-        case ..<0.4:
+    public static func preferredExportPresets(for preset: VideoPreset, customSize: Bool) -> [String] {
+        switch preset {
+        case .smallerFile:
             return [
                 AVAssetExportPresetLowQuality,
                 AVAssetExportPreset640x480,
-                AVAssetExportPresetMediumQuality,
-                AVAssetExportPresetHighestQuality
-            ]
-        case ..<0.75:
-            return [
-                AVAssetExportPresetMediumQuality,
+                AVAssetExportPreset960x540,
                 AVAssetExportPreset1280x720,
-                AVAssetExportPresetHighestQuality
+                AVAssetExportPresetMediumQuality
             ]
-        default:
+        case .fast1080p:
+            return customSize
+                ? [
+                    AVAssetExportPreset1920x1080,
+                    AVAssetExportPreset1280x720,
+                    AVAssetExportPresetHighestQuality,
+                    AVAssetExportPresetMediumQuality
+                ]
+                : [
+                    AVAssetExportPresetMediumQuality,
+                    AVAssetExportPreset1920x1080,
+                    AVAssetExportPreset1280x720,
+                    AVAssetExportPresetHighestQuality
+                ]
+        case .highQuality:
             return [
                 AVAssetExportPresetHEVCHighestQuality,
                 AVAssetExportPresetHighestQuality,
@@ -39,8 +37,8 @@ public enum VideoPresetSelector: Sendable {
         }
     }
 
-    public static func choose(quality: Double, customSize: Bool, compatible: [String]) -> String? {
-        preferredPresets(quality: quality, customSize: customSize)
+    public static func choose(preset: VideoPreset, customSize: Bool, compatible: [String]) -> String? {
+        preferredExportPresets(for: preset, customSize: customSize)
             .first { compatible.contains($0) }
             ?? compatible.first {
                 $0 != AVAssetExportPresetPassthrough && $0 != AVAssetExportPresetAppleM4A
@@ -75,13 +73,7 @@ public actor VideoProcessor {
             let sourceWidth = max(1, Int(abs(display.width).rounded()))
             let sourceHeight = max(1, Int(abs(display.height).rounded()))
             let targetSize = evenPixelSize(
-                ResolutionCalculator.dimensions(
-                    sourceWidth: sourceWidth,
-                    sourceHeight: sourceHeight,
-                    mode: options.resolutionMode,
-                    width: options.resolutionWidth,
-                    height: options.resolutionHeight
-                )
+                options.videoPreset.dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
             )
             let customSize = targetSize.width != sourceWidth || targetSize.height != sourceHeight
 
@@ -96,7 +88,7 @@ public actor VideoProcessor {
                 naturalSize: naturalSize,
                 to: temporary,
                 format: plan.finalFormat,
-                quality: options.quality,
+                preset: options.videoPreset,
                 preserveMetadata: options.preserveMetadata,
                 targetSize: targetSize,
                 customSize: customSize
@@ -106,9 +98,7 @@ public actor VideoProcessor {
             let encodedSize = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize.map(Int64.init) ?? 0
             let outputSize = try await displaySize(of: temporary)
 
-            if options.outputFormat == .original,
-               options.resolutionMode == .original,
-               encodedSize >= plan.image.byteCount {
+            if !customSize, encodedSize >= plan.image.byteCount {
                 if options.destinationURL != nil {
                     try fileManager.copyItem(at: plan.image.sourceURL, to: plan.outputURL)
                 }
@@ -140,14 +130,14 @@ public actor VideoProcessor {
         naturalSize: CGSize,
         to url: URL,
         format: MediaFormat,
-        quality: Double,
+        preset: VideoPreset,
         preserveMetadata: Bool,
         targetSize: PixelSize,
         customSize: Bool
     ) async throws {
         let fileType = Self.fileType(for: format)
         let compatible = AVAssetExportSession.exportPresets(compatibleWith: asset)
-        let presets = VideoPresetSelector.preferredPresets(quality: quality, customSize: customSize)
+        let presets = VideoPresetSelector.preferredExportPresets(for: preset, customSize: customSize)
             .filter { compatible.contains($0) }
         var lastError: Error = UkigumuSqueezeError.videoExportUnavailable
 

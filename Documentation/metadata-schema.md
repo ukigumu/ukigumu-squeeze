@@ -7,6 +7,7 @@
 - `date`: ISO-8601 timestamp
 - `quality`: number from 0 through 1
 - `selectedFormat`: `original`, `webp`, `jpeg`, `png`, `avif`, `heic`, `tiff`, `mp4`, or `mov`
+- `videoPreset`: `smallerFile`, `fast1080p`, or `highQuality`
 - `metadataPolicy`: `preserve-compatible` or `remove`
 - `usesDestination`: boolean
 - `summary`: total/status counts and byte totals

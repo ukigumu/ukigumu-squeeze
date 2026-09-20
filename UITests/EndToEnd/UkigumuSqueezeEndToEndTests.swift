@@ -106,7 +106,7 @@ final class UkigumuSqueezeEndToEndTests: UkigumuSqueezeUITestCase {
     func testVideoCompressionWithDestination() throws {
         let source = try copyFixture("Sources/Video/solid.mp4")
         let destination = try makeDestination()
-        launch(inputs: [source], destination: destination, format: "mp4")
+        launch(inputs: [source], destination: destination, format: "mp4", videoPreset: "smallerFile")
         compressAndWait(expectedCount: 1, timeout: 40)
         XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "solid.mp4").path))
