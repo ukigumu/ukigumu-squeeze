@@ -2,10 +2,22 @@ import Foundation
 
 enum TemporaryOutput {
     static func url(adjacentTo outputURL: URL, pathExtension: String = "tmp") -> URL {
-        let trimmed = pathExtension.trimmingCharacters(in: CharacterSet(charactersIn: "."))
-        let ext = trimmed.isEmpty ? "tmp" : trimmed
+        let ext = normalizedExtension(pathExtension)
         return outputURL.deletingLastPathComponent()
             .appending(path: ".ukigumu-squeeze-\(UUID().uuidString).\(ext)")
+    }
+
+    /// Private container path. `AVAssetExportSession` writes from a helper
+    /// that does not inherit the sandbox extension of a user-selected folder,
+    /// so video encode temps live here and are moved out after export.
+    static func containerURL(pathExtension: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "ukigumu-squeeze-\(UUID().uuidString).\(normalizedExtension(pathExtension))")
+    }
+
+    static func normalizedExtension(_ pathExtension: String) -> String {
+        let trimmed = pathExtension.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        return trimmed.isEmpty ? "tmp" : trimmed
     }
 }
 

@@ -13,6 +13,10 @@ public actor ImageProcessor {
         _ plan: PlannedOutput,
         options: ProcessingOptions
     ) async -> ProcessingResult {
+        let scope = SecurityScopedAccess(
+            urls: SecurityScopedAccess.urls(for: plan, destination: options.destinationURL)
+        )
+        defer { scope.stop() }
         do {
             try Task.checkCancellation()
             guard let source = CGImageSourceCreateWithURL(plan.image.sourceURL as CFURL, nil),

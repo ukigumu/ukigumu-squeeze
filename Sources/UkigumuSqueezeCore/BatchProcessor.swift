@@ -10,7 +10,8 @@ public actor BatchProcessor {
         options: ProcessingOptions,
         maximumConcurrentTasks: Int = max(2, min(ProcessInfo.processInfo.activeProcessorCount, 6)),
         progress: @escaping @MainActor @Sendable (ProcessingResult) -> Void,
-        itemProgress: (@MainActor @Sendable (UUID, Double) -> Void)? = nil
+        itemProgress: (@MainActor @Sendable (UUID, Double) -> Void)? = nil,
+        recoverAccess: (@Sendable (PlannedOutput) async -> Bool)? = nil
     ) async -> [ProcessingResult] {
         let imageProcessor = ImageProcessor()
         let videoProcessor = VideoProcessor()
@@ -29,7 +30,8 @@ public actor BatchProcessor {
                                 options: options,
                                 imageProcessor: imageProcessor,
                                 videoProcessor: videoProcessor,
-                                itemProgress: itemProgress
+                                itemProgress: itemProgress,
+                                recoverAccess: recoverAccess
                             )
                         }
                     }
@@ -44,7 +46,8 @@ public actor BatchProcessor {
                                 options: options,
                                 imageProcessor: imageProcessor,
                                 videoProcessor: videoProcessor,
-                                itemProgress: itemProgress
+                                itemProgress: itemProgress,
+                                recoverAccess: recoverAccess
                             )
                         }
                     }
@@ -69,20 +72,55 @@ public actor BatchProcessor {
         options: ProcessingOptions,
         imageProcessor: ImageProcessor,
         videoProcessor: VideoProcessor,
-        itemProgress: (@MainActor @Sendable (UUID, Double) -> Void)?
+        itemProgress: (@MainActor @Sendable (UUID, Double) -> Void)?,
+        recoverAccess: (@Sendable (PlannedOutput) async -> Bool)?
     ) async -> ProcessingResult {
         await itemProgress?(plan.image.id, 0)
-        let result: ProcessingResult
+        var result = await run(
+            plan,
+            options: options,
+            imageProcessor: imageProcessor,
+            videoProcessor: videoProcessor,
+            itemProgress: itemProgress
+        )
+        if result.status == .error,
+           ProcessingErrorMessage.describesPermissionFailure(result.error),
+           let recoverAccess {
+            if await recoverAccess(plan) {
+                await itemProgress?(plan.image.id, 0)
+                result = await run(
+                    plan,
+                    options: options,
+                    imageProcessor: imageProcessor,
+                    videoProcessor: videoProcessor,
+                    itemProgress: itemProgress
+                )
+            } else {
+                result = ProcessingResult.failure(
+                    plan: plan,
+                    status: .error,
+                    error: FolderAccessPromptCopy.cancelled
+                )
+            }
+        }
+        await itemProgress?(plan.image.id, 1)
+        return result
+    }
+
+    nonisolated private static func run(
+        _ plan: PlannedOutput,
+        options: ProcessingOptions,
+        imageProcessor: ImageProcessor,
+        videoProcessor: VideoProcessor,
+        itemProgress: (@MainActor @Sendable (UUID, Double) -> Void)?
+    ) async -> ProcessingResult {
         if plan.image.format.kind == .video {
-            result = await videoProcessor.process(plan, options: options) { fraction in
+            return await videoProcessor.process(plan, options: options) { fraction in
                 Task { @MainActor in
                     itemProgress?(plan.image.id, fraction)
                 }
             }
-        } else {
-            result = await imageProcessor.process(plan, options: options)
         }
-        await itemProgress?(plan.image.id, 1)
-        return result
+        return await imageProcessor.process(plan, options: options)
     }
 }

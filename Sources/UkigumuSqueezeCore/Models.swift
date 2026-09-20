@@ -381,7 +381,38 @@ public enum ItemStatus: String, Codable, Sendable {
 }
 
 public enum ProcessingErrorMessage: Sendable {
+    public static let sandboxBlocked =
+        "macOS blocked access to this file. Re-choose the file or folder with Choose files…"
+
     public static func fromFailure(_ error: Error) -> String {
+        let raw = rawMessage(error)
+        if isPermissionFailure(error) {
+            if raw.isEmpty || isOpaquePermissionMessage(raw) {
+                return sandboxBlocked
+            }
+            if raw.contains(sandboxBlocked) {
+                return raw
+            }
+            return "\(sandboxBlocked) \(raw)"
+        }
+        return raw.isEmpty ? "Video export failed" : raw
+    }
+
+    public static func isPermissionFailure(_ error: Error) -> Bool {
+        if isPermissionNSError(error as NSError) { return true }
+        if describesPermissionFailure(rawMessage(error)) { return true }
+        return false
+    }
+
+    public static func describesPermissionFailure(_ message: String?) -> Bool {
+        let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return false }
+        if trimmed.contains(sandboxBlocked) { return true }
+        if trimmed.contains(FolderAccessPromptCopy.cancelled) { return false }
+        return isOpaquePermissionMessage(trimmed)
+    }
+
+    private static func rawMessage(_ error: Error) -> String {
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
            !description.isEmpty {
@@ -400,12 +431,40 @@ public enum ProcessingErrorMessage: Sendable {
             }
         }
         if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-            let nested = fromFailure(underlying)
+            let nested = rawMessage(underlying)
             if !nested.isEmpty, nested != "Video export failed" {
                 return nested
             }
         }
-        return "Video export failed"
+        return ""
+    }
+
+    private static func isPermissionNSError(_ error: NSError) -> Bool {
+        if error.domain == NSCocoaErrorDomain,
+           error.code == NSFileReadNoPermissionError || error.code == NSFileWriteNoPermissionError {
+            return true
+        }
+        if error.domain == NSPOSIXErrorDomain, error.code == 1 || error.code == 13 {
+            return true
+        }
+        if isOpaquePermissionMessage(error.localizedDescription)
+            || isOpaquePermissionMessage(error.localizedFailureReason ?? "") {
+            return true
+        }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            return isPermissionNSError(underlying)
+        }
+        return false
+    }
+
+    private static func isOpaquePermissionMessage(_ message: String) -> Bool {
+        let folded = message
+            .replacingOccurrences(of: "\u{2019}", with: "'")
+            .lowercased()
+        return folded.contains("don't have permission")
+            || folded.contains("you do not have permission")
+            || folded.contains("not permitted")
+            || folded == "the operation couldn't be completed."
     }
 }
 
@@ -531,6 +590,7 @@ public enum UkigumuSqueezeError: LocalizedError {
     case collision(URL)
     case originalFolderConflict(URL)
     case validationFailed(URL)
+    case folderAccessCancelled
 
     public var errorDescription: String? {
         switch self {
@@ -544,6 +604,7 @@ public enum UkigumuSqueezeError: LocalizedError {
         case .collision(let url): "Output already exists: \(url.path)"
         case .originalFolderConflict(let url): "An Original folder conflicts with the required original folder: \(url.path)"
         case .validationFailed(let url): "The encoded file could not be validated: \(url.lastPathComponent)"
+        case .folderAccessCancelled: FolderAccessPromptCopy.cancelled
         }
     }
 }

@@ -41,3 +41,17 @@ input containers are not writable through the system export session. Photo
 quality and photo resolution controls do not change video output. The queue
 reports per-item export progress from `AVAssetExportSession.progress`. Failed
 rows keep a non-empty error string for the Status column.
+
+App Sandbox only grants dropped or panel-chosen files while
+`startAccessingSecurityScopedResource()` stays active. Video encode holds that
+access on the source, folder root, destination, and `original/` paths for the
+whole `AVAssetExportSession` lifetime, including `exportAsynchronously`.
+Bookmarks are resolved before `AVURLAsset` is created. The encode temp is
+written inside the app container, then moved to the destination under the same
+scoped access.
+
+If a needed folder is not already covered, or encode fails with a sandbox
+permission error, the app shows the native open panel once per folder root
+with the copy "Ukigumu Squeeze needs access to this folder to compress videos
+locally." A grant is bookmarked and encode retries. Cancelling the panel
+leaves a clear folder-access error instead of "You don't have permission."

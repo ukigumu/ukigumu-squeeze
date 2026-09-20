@@ -270,6 +270,179 @@ struct CoreTests {
         #expect(url.pathExtension == "mp4")
         #expect(url.lastPathComponent.hasPrefix(".ukigumu-squeeze-"))
         #expect(TemporaryOutput.url(adjacentTo: URL(filePath: "/tmp/out.jpg")).pathExtension == "tmp")
+        let container = TemporaryOutput.containerURL(pathExtension: "mp4")
+        #expect(container.pathExtension == "mp4")
+        #expect(container.lastPathComponent.hasPrefix("ukigumu-squeeze-"))
+        #expect(
+            container.deletingLastPathComponent().standardizedFileURL
+                == FileManager.default.temporaryDirectory.standardizedFileURL
+        )
+    }
+
+    @Test("Security-scoped encode holds source, destination, and original paths")
+    func securityScopedEncodeURLs() throws {
+        let video = fixture(relativePath: "clip.mov", format: .mov)
+        let destination = URL(filePath: "/tmp/output-dest")
+        let destPlan = try #require(
+            OutputPlanner().plan(
+                images: [video],
+                options: ProcessingOptions(destinationURL: destination, videoPreset: .fast1080p)
+            ).first
+        )
+        let destURLs = SecurityScopedAccess.urls(for: destPlan, destination: destination)
+            .map(\.standardizedFileURL.path)
+        #expect(destURLs.contains(video.sourceURL.standardizedFileURL.path))
+        #expect(destURLs.contains(video.rootURL.standardizedFileURL.path))
+        #expect(destURLs.contains(destination.standardizedFileURL.path))
+        #expect(destURLs.contains(destPlan.outputURL.deletingLastPathComponent().standardizedFileURL.path))
+
+        let inPlace = try #require(
+            OutputPlanner().plan(images: [video], options: ProcessingOptions(videoPreset: .fast1080p)).first
+        )
+        let inPlaceURLs = SecurityScopedAccess.urls(for: inPlace, destination: nil)
+            .map(\.standardizedFileURL.path)
+        #expect(inPlaceURLs.contains(video.sourceURL.standardizedFileURL.path))
+        #expect(inPlace.backupURL != nil)
+        #expect(inPlaceURLs.contains(inPlace.backupURL!.standardizedFileURL.path))
+        #expect(inPlaceURLs.contains(inPlace.backupURL!.deletingLastPathComponent().standardizedFileURL.path))
+
+        let access = SecurityScopedAccess(urls: SecurityScopedAccess.urls(for: destPlan, destination: destination))
+        access.stop()
+        #expect(access.accessedURLs.isEmpty)
+    }
+
+    @Test("Sandbox permission errors map to a re-choose message and keep the system detail")
+    func sandboxPermissionMessage() {
+        let opaque = NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileReadNoPermissionError,
+            userInfo: [NSLocalizedDescriptionKey: "You don’t have permission."]
+        )
+        let mapped = ProcessingErrorMessage.fromFailure(opaque)
+        #expect(mapped.contains(ProcessingErrorMessage.sandboxBlocked))
+        #expect(ProcessingErrorMessage.isPermissionFailure(opaque))
+
+        let ascii = NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileWriteNoPermissionError,
+            userInfo: [NSLocalizedDescriptionKey: "You don't have permission."]
+        )
+        #expect(ProcessingErrorMessage.fromFailure(ascii).contains(ProcessingErrorMessage.sandboxBlocked))
+
+        let posix = NSError(domain: NSPOSIXErrorDomain, code: 13, userInfo: [:])
+        #expect(ProcessingErrorMessage.isPermissionFailure(posix))
+        #expect(ProcessingErrorMessage.fromFailure(posix).contains(ProcessingErrorMessage.sandboxBlocked))
+
+        let detailed = NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileReadNoPermissionError,
+            userInfo: [NSLocalizedDescriptionKey: "The file couldn’t be opened because you don’t have permission to view it."]
+        )
+        let detailedMessage = ProcessingErrorMessage.fromFailure(detailed)
+        #expect(detailedMessage.contains(ProcessingErrorMessage.sandboxBlocked))
+        #expect(detailedMessage.contains("permission"))
+
+        #expect(
+            !ProcessingErrorMessage.isPermissionFailure(UkigumuSqueezeError.videoExportUnavailable)
+        )
+        #expect(
+            ProcessingErrorMessage.fromFailure(UkigumuSqueezeError.videoExportUnavailable)
+                == "No compatible local video export preset is available"
+        )
+        #expect(
+            ProcessingErrorMessage.fromFailure(UkigumuSqueezeError.folderAccessCancelled)
+                == FolderAccessPromptCopy.cancelled
+        )
+        #expect(!ProcessingErrorMessage.isPermissionFailure(UkigumuSqueezeError.folderAccessCancelled))
+        #expect(ProcessingErrorMessage.describesPermissionFailure(ProcessingErrorMessage.sandboxBlocked))
+        #expect(!ProcessingErrorMessage.describesPermissionFailure(FolderAccessPromptCopy.cancelled))
+        #expect(FolderAccessPromptCopy.message.contains("compress videos locally"))
+    }
+
+    @Test("Folder access is requested once per root and a parent grant covers children")
+    func folderAccessOncePerRoot() throws {
+        let first = fixture(relativePath: "one.mov", format: .mov)
+        let second = fixture(relativePath: "nested/two.mov", format: .mov)
+        let destination = URL(filePath: "/tmp/output-dest")
+        let plans = try OutputPlanner().plan(
+            images: [first, second],
+            options: ProcessingOptions(destinationURL: destination, videoPreset: .fast1080p)
+        )
+        let fileGrant = [first.sourceURL, second.sourceURL]
+        let missing = SandboxAccessProbe.foldersNeedingGrant(
+            plans: plans,
+            destination: destination,
+            covered: fileGrant
+        )
+        #expect(missing.map(\.standardizedFileURL.path) == [destination.standardizedFileURL.path])
+
+        let inPlace = try OutputPlanner().plan(
+            images: [first, second],
+            options: ProcessingOptions(videoPreset: .fast1080p)
+        )
+        let inPlaceMissing = SandboxAccessProbe.foldersNeedingGrant(
+            plans: inPlace,
+            destination: nil,
+            covered: fileGrant
+        )
+        #expect(inPlaceMissing.map(\.standardizedFileURL.path) == [first.rootURL.standardizedFileURL.path])
+        #expect(
+            SandboxAccessProbe.plans(inPlace, requiring: first.rootURL, destination: nil).count == 2
+        )
+
+        #expect(!SandboxAccessProbe.isCovered(first.rootURL, by: [first.sourceURL]))
+        #expect(SandboxAccessProbe.isCovered(first.sourceURL, by: [first.rootURL]))
+        #expect(
+            SandboxAccessProbe.foldersNeedingGrant(
+                plans: plans,
+                destination: destination,
+                covered: [first.rootURL, destination]
+            ).isEmpty
+        )
+    }
+
+    @Test("Folder access cache asks once and skips children after a parent decision")
+    func folderAccessCache() async {
+        let cache = FolderAccessDecisionCache()
+        let root = URL(filePath: "/tmp/movies")
+        let child = root.appending(path: "trip")
+        actor PromptCount {
+            var value = 0
+            func increment() { value += 1 }
+            func current() -> Int { value }
+        }
+        let prompts = PromptCount()
+
+        let first = await cache.decision(for: root) { folder in
+            await prompts.increment()
+            return folder
+        }
+        let second = await cache.decision(for: root) { _ in
+            await prompts.increment()
+            return nil
+        }
+        let nested = await cache.decision(for: child) { _ in
+            await prompts.increment()
+            return nil
+        }
+        #expect(first == root)
+        #expect(second == root)
+        #expect(nested == root)
+        #expect(await prompts.current() == 1)
+        #expect(await cache.isDenied(child) == false)
+
+        let deniedCache = FolderAccessDecisionCache()
+        let cancelled = await deniedCache.decision(for: root) { _ in
+            return nil
+        }
+        let childAfterDeny = await deniedCache.decision(for: child) { _ in
+            await prompts.increment()
+            return child
+        }
+        #expect(cancelled == nil)
+        #expect(childAfterDeny == nil)
+        #expect(await deniedCache.isDenied(child))
+        #expect(await prompts.current() == 1)
     }
 
     @Test("Video presets map to AVFoundation export presets")
@@ -384,5 +557,12 @@ struct BookmarkTests {
 
         #expect(restoredStore.restoreInputs().first?.standardizedFileURL == root.standardizedFileURL)
         #expect(restoredStore.restoreDestination()?.standardizedFileURL == root.standardizedFileURL)
+
+        try firstStore.rememberGrantedFolder(root)
+        let grantedStore = SecurityScopedBookmarkStore(defaults: defaults)
+        #expect(
+            grantedStore.restoreGrantedFolders().map(\.standardizedFileURL)
+                == [root.standardizedFileURL]
+        )
     }
 }

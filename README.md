@@ -117,7 +117,9 @@ After launch, drop photos, videos, or folders (or use Choose files or folders). 
 
 ## File safety
 
-With no destination, every result is first encoded to a uniquely named temporary file on the output volume, reopened, and checked for format and dimensions. The original is then moved into `original/<relative path>`. Only after that move succeeds is the validated output moved into place. If placement fails, the original is moved back. Temporary files are removed on errors and cancellation.
+With no destination, every result is first encoded to a uniquely named temporary file, reopened, and checked for format and dimensions. Photos encode next to the output. Videos encode inside the app container so `AVAssetExportSession` does not write through a sandbox extension, then the validated file is moved into place. The original is then moved into `original/<relative path>`. If placement fails, the original is moved back. Temporary files are removed on errors and cancellation.
+
+Dropped or chosen files need security-scoped access for the whole encode. If that grant is missing, Squeeze asks once for the containing folder (or the destination folder) with the native open panel, bookmarks the grant, and retries. Cancelling the panel shows a folder-access error instead of "You don't have permission."
 
 With a destination, source files are never moved. The relative hierarchy is recreated under the destination. Existing outputs and case-insensitive collisions are rejected before processing.
 
