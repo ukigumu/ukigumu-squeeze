@@ -270,6 +270,85 @@ struct CoreTests {
         #expect(url.pathExtension == "mp4")
         #expect(url.lastPathComponent.hasPrefix(".ukigumu-squeeze-"))
         #expect(TemporaryOutput.url(adjacentTo: URL(filePath: "/tmp/out.jpg")).pathExtension == "tmp")
+        let container = TemporaryOutput.containerURL(pathExtension: "mp4")
+        #expect(container.pathExtension == "mp4")
+        #expect(container.lastPathComponent.hasPrefix("ukigumu-squeeze-"))
+        #expect(
+            container.deletingLastPathComponent().standardizedFileURL
+                == FileManager.default.temporaryDirectory.standardizedFileURL
+        )
+    }
+
+    @Test("Security-scoped encode holds source, destination, and original paths")
+    func securityScopedEncodeURLs() throws {
+        let video = fixture(relativePath: "clip.mov", format: .mov)
+        let destination = URL(filePath: "/tmp/output-dest")
+        let destPlan = try #require(
+            OutputPlanner().plan(
+                images: [video],
+                options: ProcessingOptions(destinationURL: destination, videoPreset: .fast1080p)
+            ).first
+        )
+        let destURLs = SecurityScopedAccess.urls(for: destPlan, destination: destination)
+            .map(\.standardizedFileURL.path)
+        #expect(destURLs.contains(video.sourceURL.standardizedFileURL.path))
+        #expect(destURLs.contains(video.rootURL.standardizedFileURL.path))
+        #expect(destURLs.contains(destination.standardizedFileURL.path))
+        #expect(destURLs.contains(destPlan.outputURL.deletingLastPathComponent().standardizedFileURL.path))
+
+        let inPlace = try #require(
+            OutputPlanner().plan(images: [video], options: ProcessingOptions(videoPreset: .fast1080p)).first
+        )
+        let inPlaceURLs = SecurityScopedAccess.urls(for: inPlace, destination: nil)
+            .map(\.standardizedFileURL.path)
+        #expect(inPlaceURLs.contains(video.sourceURL.standardizedFileURL.path))
+        #expect(inPlace.backupURL != nil)
+        #expect(inPlaceURLs.contains(inPlace.backupURL!.standardizedFileURL.path))
+        #expect(inPlaceURLs.contains(inPlace.backupURL!.deletingLastPathComponent().standardizedFileURL.path))
+
+        let access = SecurityScopedAccess(urls: SecurityScopedAccess.urls(for: destPlan, destination: destination))
+        access.stop()
+        #expect(access.accessedURLs.isEmpty)
+    }
+
+    @Test("Sandbox permission errors map to a re-choose message and keep the system detail")
+    func sandboxPermissionMessage() {
+        let opaque = NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileReadNoPermissionError,
+            userInfo: [NSLocalizedDescriptionKey: "You don’t have permission."]
+        )
+        let mapped = ProcessingErrorMessage.fromFailure(opaque)
+        #expect(mapped.contains(ProcessingErrorMessage.sandboxBlocked))
+        #expect(ProcessingErrorMessage.isPermissionFailure(opaque))
+
+        let ascii = NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileWriteNoPermissionError,
+            userInfo: [NSLocalizedDescriptionKey: "You don't have permission."]
+        )
+        #expect(ProcessingErrorMessage.fromFailure(ascii).contains(ProcessingErrorMessage.sandboxBlocked))
+
+        let posix = NSError(domain: NSPOSIXErrorDomain, code: 13, userInfo: [:])
+        #expect(ProcessingErrorMessage.isPermissionFailure(posix))
+        #expect(ProcessingErrorMessage.fromFailure(posix).contains(ProcessingErrorMessage.sandboxBlocked))
+
+        let detailed = NSError(
+            domain: NSCocoaErrorDomain,
+            code: NSFileReadNoPermissionError,
+            userInfo: [NSLocalizedDescriptionKey: "The file couldn’t be opened because you don’t have permission to view it."]
+        )
+        let detailedMessage = ProcessingErrorMessage.fromFailure(detailed)
+        #expect(detailedMessage.contains(ProcessingErrorMessage.sandboxBlocked))
+        #expect(detailedMessage.contains("permission"))
+
+        #expect(
+            !ProcessingErrorMessage.isPermissionFailure(UkigumuSqueezeError.videoExportUnavailable)
+        )
+        #expect(
+            ProcessingErrorMessage.fromFailure(UkigumuSqueezeError.videoExportUnavailable)
+                == "No compatible local video export preset is available"
+        )
     }
 
     @Test("Video presets map to AVFoundation export presets")

@@ -51,87 +51,127 @@ public actor VideoProcessor {
         options: ProcessingOptions,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async -> ProcessingResult {
-        let sourceAccess = plan.image.sourceURL.startAccessingSecurityScopedResource()
-        let rootAccess = plan.image.rootURL.startAccessingSecurityScopedResource()
-        defer {
-            if sourceAccess { plan.image.sourceURL.stopAccessingSecurityScopedResource() }
-            if rootAccess { plan.image.rootURL.stopAccessingSecurityScopedResource() }
-        }
+        let scope = SecurityScopedAccess(
+            urls: SecurityScopedAccess.urls(for: plan, destination: options.destinationURL)
+        )
+        defer { scope.stop() }
         do {
-            try Task.checkCancellation()
-            progress?(0.02)
-            let asset = AVURLAsset(url: plan.image.sourceURL)
-            let videoTracks = try await asset.loadTracks(withMediaType: .video)
-            guard let videoTrack = videoTracks.first else {
-                throw UkigumuSqueezeError.invalidVideo(plan.image.sourceURL)
-            }
-
-            let naturalSize = try await videoTrack.load(.naturalSize)
-            let transform = try await videoTrack.load(.preferredTransform)
-            let duration = try await asset.load(.duration)
-            let metadata = (try? await asset.load(.metadata)) ?? []
-            let display = naturalSize.applying(transform)
-            let sourceWidth = max(1, Int(abs(display.width).rounded()))
-            let sourceHeight = max(1, Int(abs(display.height).rounded()))
-            let profile = options.videoProfile
-            let targetSize = evenPixelSize(
-                profile.dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-            )
-            let resized = targetSize.width != sourceWidth || targetSize.height != sourceHeight
-
-            let temporary = TemporaryOutput.url(
-                adjacentTo: plan.outputURL,
-                pathExtension: plan.finalFormat.preferredExtension
-            )
-            defer { try? fileManager.removeItem(at: temporary) }
-            try fileManager.createDirectory(at: temporary.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try await export(
-                asset: asset,
-                videoTrack: videoTrack,
-                duration: duration,
-                preferredTransform: transform,
-                naturalSize: naturalSize,
-                to: temporary,
-                format: plan.finalFormat,
-                profile: profile,
-                preserveMetadata: options.preserveMetadata,
-                targetSize: targetSize,
-                resized: resized,
+            return try await encode(
+                plan,
+                options: options,
+                sourceURL: plan.image.sourceURL,
                 progress: progress
-            )
-            try await validate(temporary, expectedFormat: plan.finalFormat)
-            try Task.checkCancellation()
-            let encodedSize = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize.map(Int64.init) ?? 0
-            let outputSize = try await displaySize(of: temporary)
-
-            if !resized, encodedSize >= plan.image.byteCount {
-                if options.destinationURL != nil {
-                    try fileManager.copyItem(at: plan.image.sourceURL, to: plan.outputURL)
-                }
-                progress?(1)
-                return ProcessingResult.success(
-                    plan: plan, width: sourceWidth, height: sourceHeight,
-                    finalBytes: plan.image.byteCount, metadataAvailable: !metadata.isEmpty,
-                    status: .noImprovement
-                )
-            }
-
-            try OutputCommitter.commit(temporary: temporary, plan: plan, fileManager: fileManager)
-            progress?(1)
-            return ProcessingResult.success(
-                plan: plan, width: outputSize.width, height: outputSize.height,
-                finalBytes: encodedSize, metadataAvailable: !metadata.isEmpty,
-                status: .completed
             )
         } catch is CancellationError {
             return ProcessingResult.failure(plan: plan, status: .cancelled, error: nil)
         } catch {
+            if ProcessingErrorMessage.isPermissionFailure(error) {
+                do {
+                    let staged = try stageSource(plan.image.sourceURL)
+                    defer { try? fileManager.removeItem(at: staged) }
+                    return try await encode(
+                        plan,
+                        options: options,
+                        sourceURL: staged,
+                        progress: progress
+                    )
+                } catch is CancellationError {
+                    return ProcessingResult.failure(plan: plan, status: .cancelled, error: nil)
+                } catch {
+                    return ProcessingResult.failure(
+                        plan: plan,
+                        status: .error,
+                        error: ProcessingErrorMessage.fromFailure(error)
+                    )
+                }
+            }
             return ProcessingResult.failure(
                 plan: plan,
                 status: .error,
                 error: ProcessingErrorMessage.fromFailure(error)
             )
         }
+    }
+
+    private func encode(
+        _ plan: PlannedOutput,
+        options: ProcessingOptions,
+        sourceURL: URL,
+        progress: (@Sendable (Double) -> Void)?
+    ) async throws -> ProcessingResult {
+        try Task.checkCancellation()
+        progress?(0.02)
+        let asset = AVURLAsset(url: sourceURL)
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        guard let videoTrack = videoTracks.first else {
+            throw UkigumuSqueezeError.invalidVideo(plan.image.sourceURL)
+        }
+
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let transform = try await videoTrack.load(.preferredTransform)
+        let duration = try await asset.load(.duration)
+        let metadata = (try? await asset.load(.metadata)) ?? []
+        let display = naturalSize.applying(transform)
+        let sourceWidth = max(1, Int(abs(display.width).rounded()))
+        let sourceHeight = max(1, Int(abs(display.height).rounded()))
+        let profile = options.videoProfile
+        let targetSize = evenPixelSize(
+            profile.dimensions(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
+        )
+        let resized = targetSize.width != sourceWidth || targetSize.height != sourceHeight
+
+        let temporary = TemporaryOutput.containerURL(pathExtension: plan.finalFormat.preferredExtension)
+        defer { try? fileManager.removeItem(at: temporary) }
+        try fileManager.createDirectory(at: temporary.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try await export(
+            asset: asset,
+            videoTrack: videoTrack,
+            duration: duration,
+            preferredTransform: transform,
+            naturalSize: naturalSize,
+            to: temporary,
+            format: plan.finalFormat,
+            profile: profile,
+            preserveMetadata: options.preserveMetadata,
+            targetSize: targetSize,
+            resized: resized,
+            progress: progress
+        )
+        try await validate(temporary, expectedFormat: plan.finalFormat)
+        try Task.checkCancellation()
+        let encodedSize = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize.map(Int64.init) ?? 0
+        let outputSize = try await displaySize(of: temporary)
+
+        if !resized, encodedSize >= plan.image.byteCount {
+            if options.destinationURL != nil {
+                try fileManager.copyItem(at: plan.image.sourceURL, to: plan.outputURL)
+            }
+            progress?(1)
+            return ProcessingResult.success(
+                plan: plan, width: sourceWidth, height: sourceHeight,
+                finalBytes: plan.image.byteCount, metadataAvailable: !metadata.isEmpty,
+                status: .noImprovement
+            )
+        }
+
+        try OutputCommitter.commit(temporary: temporary, plan: plan, fileManager: fileManager)
+        progress?(1)
+        return ProcessingResult.success(
+            plan: plan, width: outputSize.width, height: outputSize.height,
+            finalBytes: encodedSize, metadataAvailable: !metadata.isEmpty,
+            status: .completed
+        )
+    }
+
+    private func stageSource(_ sourceURL: URL) throws -> URL {
+        let staged = TemporaryOutput.containerURL(
+            pathExtension: sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
+        )
+        if fileManager.fileExists(atPath: staged.path) {
+            try fileManager.removeItem(at: staged)
+        }
+        try fileManager.copyItem(at: sourceURL, to: staged)
+        return staged
     }
 
     private func export(

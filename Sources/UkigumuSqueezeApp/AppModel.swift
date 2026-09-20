@@ -98,6 +98,7 @@ final class AppModel {
         urls.forEach(bookmarkStore.access)
         do { try bookmarkStore.saveInputs(inputs) }
         catch { errorMessage = error.localizedDescription }
+        adoptResolvedInputs()
         refresh()
     }
 
@@ -116,6 +117,7 @@ final class AppModel {
         urls.forEach(bookmarkStore.access)
         do { try bookmarkStore.saveInputs(inputs) }
         catch { errorMessage = error.localizedDescription }
+        adoptResolvedInputs()
         refresh()
     }
 
@@ -137,6 +139,7 @@ final class AppModel {
             panel.url.map(bookmarkStore.access)
             do { try bookmarkStore.saveDestination(panel.url) }
             catch { errorMessage = error.localizedDescription }
+            destinationURL = bookmarkStore.resolveDestination(destinationURL)
             refresh()
         }
     }
@@ -156,6 +159,8 @@ final class AppModel {
 
     func compress() {
         guard !items.isEmpty, !isProcessing else { return }
+        resolveSecurityScopedURLs()
+        guard !items.isEmpty else { return }
         let batchID = UUID()
         activeBatchID = batchID
         isProcessing = true
@@ -217,6 +222,29 @@ final class AppModel {
     func revealResults() {
         let urls = destinationURL.map { [$0] } ?? Array(Set(items.map(\.rootURL)))
         NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    private func adoptResolvedInputs() {
+        guard !isUITesting else { return }
+        let resolved = bookmarkStore.resolveInputs(inputs)
+        if !resolved.isEmpty {
+            inputs = resolved
+        }
+    }
+
+    private func resolveSecurityScopedURLs() {
+        guard !isUITesting else {
+            inputs.forEach(bookmarkStore.access)
+            destinationURL.map(bookmarkStore.access)
+            return
+        }
+        inputs = bookmarkStore.resolveInputs(inputs)
+        destinationURL = bookmarkStore.resolveDestination(destinationURL)
+        items = FileDiscovery().discover(at: inputs, excluding: destinationURL)
+    }
+
+    private var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains("-ui-testing")
     }
 
     private func writeReports(_ completed: [ProcessingResult], options: ProcessingOptions) throws {

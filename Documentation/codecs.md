@@ -41,3 +41,12 @@ input containers are not writable through the system export session. Photo
 quality and photo resolution controls do not change video output. The queue
 reports per-item export progress from `AVAssetExportSession.progress`. Failed
 rows keep a non-empty error string for the Status column.
+
+App Sandbox only grants dropped or panel-chosen files while
+`startAccessingSecurityScopedResource()` stays active. Video encode holds that
+access on the source, folder root, destination, and `original/` paths for the
+whole `AVAssetExportSession` lifetime, including `exportAsynchronously`.
+Bookmarks are resolved before `AVURLAsset` is created. The encode temp is
+written inside the app container, then moved to the destination under the same
+scoped access. Sandbox permission errors surface as a re-choose message and
+keep the system detail.
