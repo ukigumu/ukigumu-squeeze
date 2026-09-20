@@ -106,6 +106,12 @@ public enum OutputFormat: String, Codable, CaseIterable, Sendable {
             return source
         }
     }
+
+    public func resolvedFormat(for source: MediaFormat, videoProfile: VideoEncodeProfile) -> MediaFormat {
+        let resolved = resolvedFormat(for: source)
+        guard source.kind == .video else { return resolved }
+        return videoProfile.resolvedContainer(for: resolved)
+    }
 }
 
 public enum VideoCodec: String, Codable, Sendable {
@@ -181,7 +187,21 @@ public struct VideoEncodeProfile: Sendable, Equatable {
     }
 
     public var recipe: String {
-        "\(codec.displayName) · \(audio) · \(cap.title)"
+        let container = prefersMPEG4Container ? "MP4" : "MOV or MP4"
+        return "\(codec.displayName) · \(audio) · \(cap.title) · \(container)"
+    }
+
+    /// H.264 system export presets are MPEG-4. Keep MOV only for HEVC.
+    public var prefersMPEG4Container: Bool {
+        codec == .h264
+    }
+
+    public func resolvedContainer(for requested: MediaFormat) -> MediaFormat {
+        guard requested.kind == .video else { return requested }
+        if prefersMPEG4Container {
+            return .mp4
+        }
+        return requested.isWritableVideoContainer ? requested : .mp4
     }
 
     public func dimensions(sourceWidth: Int, sourceHeight: Int) -> PixelSize {
@@ -217,8 +237,8 @@ public enum VideoPreset: String, Codable, CaseIterable, Sendable {
 
     public var tradeoff: String {
         switch self {
-        case .smallerFile: "Smallest size. Caps at 720p."
-        case .fast1080p: "Balanced size and quality. Caps at 1080p."
+        case .smallerFile: "Smallest size. Caps at 720p. Writes MP4."
+        case .fast1080p: "Balanced size and quality. Caps at 1080p. Writes MP4."
         case .social: "Shareable MP4. Caps at 1080p."
         case .highQuality: "Best look. Keeps the source resolution."
         case .custom: "Pick a cap and a size versus quality lean."
@@ -338,6 +358,48 @@ public enum ResolutionCalculator {
 
 public enum ItemStatus: String, Codable, Sendable {
     case pending, processing, completed, noImprovement, cancelled, error
+
+    public func displayLabel(error: String? = nil) -> String {
+        switch self {
+        case .pending: "Waiting"
+        case .processing: "Encoding"
+        case .completed: "Done"
+        case .noImprovement: "No change"
+        case .cancelled: "Cancelled"
+        case .error:
+            let detail = error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return detail.isEmpty ? "Export failed" : detail
+        }
+    }
+}
+
+public enum ProcessingErrorMessage: Sendable {
+    public static func fromFailure(_ error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !description.isEmpty {
+            return description
+        }
+        let nsError = error as NSError
+        let candidates = [
+            nsError.localizedFailureReason,
+            nsError.localizedRecoverySuggestion,
+            nsError.localizedDescription
+        ]
+        for candidate in candidates {
+            let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+            let nested = fromFailure(underlying)
+            if !nested.isEmpty, nested != "Video export failed" {
+                return nested
+            }
+        }
+        return "Video export failed"
+    }
 }
 
 public struct DiscoveredImage: Identifiable, Hashable, Sendable {
@@ -455,6 +517,7 @@ public enum UkigumuSqueezeError: LocalizedError {
     case invalidVideo(URL)
     case outputFormatUnavailable(ImageFormat)
     case videoExportUnavailable
+    case videoExportIncompatible(MediaFormat)
     case collision(URL)
     case originalFolderConflict(URL)
     case validationFailed(URL)
@@ -466,6 +529,8 @@ public enum UkigumuSqueezeError: LocalizedError {
         case .invalidVideo(let url): "Invalid or corrupt video: \(url.lastPathComponent)"
         case .outputFormatUnavailable(let format): "\(format.rawValue.uppercased()) encoding is unavailable on this macOS version"
         case .videoExportUnavailable: "No compatible local video export preset is available"
+        case .videoExportIncompatible(let format):
+            "No compatible export preset can write \(format.rawValue.uppercased()). H.264 presets write MP4."
         case .collision(let url): "Output already exists: \(url.path)"
         case .originalFolderConflict(let url): "An Original folder conflicts with the required original folder: \(url.path)"
         case .validationFailed(let url): "The encoded file could not be validated: \(url.lastPathComponent)"
@@ -501,7 +566,15 @@ extension ProcessingResult {
     }
 
     static func failure(plan: PlannedOutput, status: ItemStatus, error: String?) -> ProcessingResult {
-        ProcessingResult(
+        let trimmed = error?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedError: String?
+        switch status {
+        case .error:
+            resolvedError = (trimmed?.isEmpty == false) ? trimmed : ItemStatus.error.displayLabel()
+        default:
+            resolvedError = (trimmed?.isEmpty == false) ? trimmed : nil
+        }
+        return ProcessingResult(
             id: plan.image.id,
             originalRelativePath: plan.image.relativePath,
             finalRelativePath: plan.relativeOutputPath,
@@ -515,7 +588,7 @@ extension ProcessingResult {
             finalBytes: 0,
             metadataAvailable: false,
             status: status,
-            error: error
+            error: resolvedError
         )
     }
 }

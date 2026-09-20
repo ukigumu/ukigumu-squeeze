@@ -29,8 +29,15 @@ presets instead of encoder knobs. Each preset maps to concrete local settings:
 - High Quality: HEVC High when available, AAC, source resolution
 - Custom: cap (720p / 1080p / 1440p / source) plus Smaller / Balanced / Higher
 
-Compatible system export presets are queried at runtime. AVI and MPEG can be
-discovered from their containers but are written as MP4 because those input
-containers are not writable through the system export session. Photo quality
-and photo resolution controls do not change video output. The queue reports
-per-item export progress from `AVAssetExportSession.progress`.
+Compatible system export presets are queried at runtime, including
+`determineCompatibility` of each preset with the asset and file type. H.264
+presets write MP4 even when the source is MOV: Apple's Low / Medium / High and
+size-based H.264 presets are MPEG-4, and many camera `.mov` files are not
+compatible with a QuickTime output file type. HEVC High Quality keeps a writable
+source container (MOV, MP4, or M4V). Temporary encode files use the planned
+container extension so AVFoundation does not reject a `.tmp` URL. AVI and MPEG
+can be discovered from their containers but are written as MP4 because those
+input containers are not writable through the system export session. Photo
+quality and photo resolution controls do not change video output. The queue
+reports per-item export progress from `AVAssetExportSession.progress`. Failed
+rows keep a non-empty error string for the Status column.

@@ -112,6 +112,16 @@ final class UkigumuSqueezeEndToEndTests: UkigumuSqueezeUITestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "solid.mp4").path))
     }
 
+    func testMOVFast1080pWritesMP4() throws {
+        let source = try copyFixture("Sources/Video/solid.mov")
+        let destination = try makeDestination()
+        launch(inputs: [source], destination: destination, videoPreset: "fast1080p")
+        compressAndWait(expectedCount: 1, timeout: 40)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "solid.mp4").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.appending(path: "solid.mov").path))
+    }
+
     func testMixedPhotoAndVideo() throws {
         _ = try copyFixture("Sources/Synthetic/gradient.png", named: "mixed/photo.png")
         _ = try copyFixture("Sources/Video/solid.mp4", named: "mixed/clip.mp4")

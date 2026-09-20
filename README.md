@@ -52,23 +52,25 @@ v0 builds are ad-hoc signed and not notarized. If macOS blocks the app, Control-
 | AVIF | Yes | Runtime checked | macOS ImageIO |
 | WebP | Yes | Yes | ImageIO decode; bundled libwebp 1.5.0 encode |
 | MP4 | Yes | Yes | macOS AVFoundation |
-| MOV | Yes | Yes | macOS AVFoundation |
-| M4V | Yes | Keep original | macOS AVFoundation |
+| MOV | Yes | HEVC keeps MOV; H.264 writes MP4 | macOS AVFoundation |
+| M4V | Yes | HEVC keeps M4V; H.264 writes MP4 | macOS AVFoundation |
 | AVI / MPEG | Yes | Written as MP4 | Identified locally; remuxed to a writable container |
 
-ImageIO is queried at runtime rather than assuming that an encoder exists. WebP is decoded by ImageIO and encoded completely offline with libwebp 1.5.0, under its BSD 3-Clause license. The license text is in `TestFixtures/Licenses/libwebp-COPYING.txt`. Video uses the system AVFoundation export session on the same Mac. Named presets pick codec, AAC audio, resolution cap, and size versus quality. Keep original leaves a writable video container as-is (MP4, MOV, M4V) and remaps AVI or MPEG to MP4. Choosing a photo format still compresses videos in their writable container. Choosing MP4 or MOV leaves photos on their photo path. See `Documentation/codecs.md` for the codec decision record.
+ImageIO is queried at runtime rather than assuming that an encoder exists. WebP is decoded by ImageIO and encoded completely offline with libwebp 1.5.0, under its BSD 3-Clause license. The license text is in `TestFixtures/Licenses/libwebp-COPYING.txt`. Video uses the system AVFoundation export session on the same Mac. Named presets pick codec, AAC audio, resolution cap, and size versus quality.
+
+H.264 presets (Smaller File, Fast 1080p, Social, and Custom with a Smaller or Balanced lean) always write MP4. Apple's H.264 export presets are MPEG-4 only, so a source `.mov` still compresses, but the output container is MP4. High Quality (HEVC) keeps a writable source container (MP4, MOV, or M4V). AVI and MPEG remap to MP4. Choosing a photo format still compresses videos on that video path. Choosing MP4 or MOV leaves photos on their photo path. See `Documentation/codecs.md` for the codec decision record.
 
 ## Video presets
 
 These are HandBrake-style names, not a HandBrake clone. Squeeze stays a simple local queue.
 
-| Preset | Codec | Audio | Resolution cap | Size vs quality |
-| --- | --- | --- | --- | --- |
-| Smaller File | H.264 | AAC | 720p | Smallest |
-| Fast 1080p | H.264 | AAC | 1080p | Balanced |
-| Social | H.264 | AAC | 1080p | Small, shareable |
-| High Quality | HEVC when available | AAC | Source | Best look |
-| Custom | H.264 or HEVC from the lean | AAC | 720p, 1080p, 1440p, or source | Smaller, Balanced, or Higher |
+| Preset | Codec | Audio | Resolution cap | Size vs quality | Output |
+| --- | --- | --- | --- | --- | --- |
+| Smaller File | H.264 | AAC | 720p | Smallest | MP4 |
+| Fast 1080p | H.264 | AAC | 1080p | Balanced | MP4 |
+| Social | H.264 | AAC | 1080p | Small, shareable | MP4 |
+| High Quality | HEVC when available | AAC | Source | Best look | Keep MOV or MP4 |
+| Custom | H.264 or HEVC from the lean | AAC | 720p, 1080p, 1440p, or source | Smaller, Balanced, or Higher | MP4 for H.264; keep container for HEVC |
 
 AVFoundation does not expose ffmpeg CRF. Quality leans map to system export presets (Low / Medium / High / HEVC High). Audio is AAC through the same local export session.
 
@@ -84,8 +86,8 @@ TestFixtures/Sources/Video/hd.mp4
 
 1. Open `UkigumuSqueeze.xcodeproj` and run the **UkigumuSqueeze** scheme.
 2. Drop `solid.mp4` or `solid.mov` onto the window. For a 1080p cap check, drop `hd.mp4`.
-3. Pick Smaller File, Fast 1080p, or Social. Choose a destination folder if you want the source left untouched.
-4. Press Compress. The queue shows Waiting / Encoding with a percent, then Done, plus before and after sizes.
+3. Pick Smaller File, Fast 1080p, or Social. The Format column shows MOV to MP4 for those H.264 presets. Choose a destination folder if you want the source left untouched.
+4. Press Compress. The queue shows Waiting / Encoding with a percent, then Done, plus before and after sizes. If a row fails, Status shows the export error, not only "Error".
 
 Automated coverage: `swift test` and the XCUITest `testVideoCompressionWithDestination`.
 
@@ -134,6 +136,6 @@ The product icon is © 2026 Ukigumu. `icon.png` is the single artwork master and
 ## Verification
 
 - Unit, integration, and fixture tests cover format detection, paths, collisions, safe writes, WebP encoding, video discovery and local export, mixed photo/video batches, multipage TIFF, JSON, bookmarks, and codec capabilities.
-- Seventeen XCUITest scenarios cover the mandatory end-to-end flows, including video and mixed batches, use isolated temporary directories, and attach a screenshot on failure.
+- Eighteen XCUITest scenarios cover the mandatory end-to-end flows, including video and mixed batches, use isolated temporary directories, and attach a screenshot on failure.
 - Performance tests record discovery, JSON, concurrent batch, progress, and memory baselines without fragile limits. See `Documentation/performance-baselines.md`.
 - Downloaded fixtures are pinned to source commits and SHA-256 values. Normal tests never use the network.

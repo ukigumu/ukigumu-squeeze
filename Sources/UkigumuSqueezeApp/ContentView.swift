@@ -176,9 +176,10 @@ struct ContentView: View {
                     } else {
                         Label(statusLabel(for: item), systemImage: statusSymbol(for: item))
                             .foregroundStyle(statusColor(for: item))
+                            .lineLimit(2)
                             .help(model.results[item.id]?.error ?? statusLabel(for: item))
                     }
-                }.width(120)
+                }.width(min: 160, ideal: 220, max: 360)
             }
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay {
@@ -524,18 +525,11 @@ struct ContentView: View {
     }
 
     private func statusLabel(for item: DiscoveredImage) -> String {
-        switch status(for: item) {
-        case .pending: "Waiting"
-        case .processing: "Encoding"
-        case .completed: "Done"
-        case .noImprovement: "No change"
-        case .cancelled: "Cancelled"
-        case .error: "Error"
-        }
+        status(for: item).displayLabel(error: model.results[item.id]?.error)
     }
 
     private func finalFormat(for item: DiscoveredImage) -> MediaFormat {
-        model.outputFormat.resolvedFormat(for: item.format)
+        model.outputFormat.resolvedFormat(for: item.format, videoProfile: model.videoProfile)
     }
 
     private func finalSize(for item: DiscoveredImage) -> String {

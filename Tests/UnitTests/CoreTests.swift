@@ -122,7 +122,7 @@ struct CoreTests {
         #expect(plan?.relativeOutputPath == "clip.mp4")
     }
 
-    @Test("Photo format selection compresses video in its writable container")
+    @Test("Photo format selection compresses H.264 video as MP4")
     func mixedFormatResolution() throws {
         let photo = fixture(relativePath: "photo.png", format: .png)
         let video = fixture(relativePath: "clip.mov", format: .mov)
@@ -130,8 +130,65 @@ struct CoreTests {
         let plans = try OutputPlanner().plan(images: [photo, video], options: options)
         #expect(plans[0].finalFormat == .jpeg)
         #expect(plans[0].relativeOutputPath == "photo.jpg")
-        #expect(plans[1].finalFormat == .mov)
-        #expect(plans[1].relativeOutputPath == "clip.mov")
+        #expect(plans[1].finalFormat == .mp4)
+        #expect(plans[1].relativeOutputPath == "clip.mp4")
+    }
+
+    @Test("H.264 presets write MP4 even when the source or picker is MOV")
+    func h264PresetsForceMP4() throws {
+        let video = fixture(relativePath: "clip.MOV", format: .mov)
+        for preset in [VideoPreset.smallerFile, .fast1080p, .social] {
+            let options = ProcessingOptions(videoPreset: preset)
+            let plan = try OutputPlanner().plan(images: [video], options: options).first
+            #expect(plan?.finalFormat == .mp4)
+            #expect(plan?.relativeOutputPath == "clip.mp4")
+            #expect(preset.profile().prefersMPEG4Container)
+            #expect(preset.profile().resolvedContainer(for: .mov) == .mp4)
+            #expect(preset.profile().recipe.contains("MP4"))
+        }
+        let explicitMOV = ProcessingOptions(outputFormat: .mov, videoPreset: .fast1080p)
+        let forced = try OutputPlanner().plan(images: [video], options: explicitMOV).first
+        #expect(forced?.finalFormat == .mp4)
+        #expect(forced?.relativeOutputPath == "clip.mp4")
+    }
+
+    @Test("HEVC High Quality keeps a writable MOV container")
+    func hevcKeepsMOV() throws {
+        let video = fixture(relativePath: "clip.mov", format: .mov)
+        let options = ProcessingOptions(outputFormat: .original, videoPreset: .highQuality)
+        let plan = try OutputPlanner().plan(images: [video], options: options).first
+        #expect(plan?.finalFormat == .mov)
+        #expect(plan?.relativeOutputPath == "clip.mov")
+        #expect(!VideoPreset.highQuality.profile().prefersMPEG4Container)
+        #expect(VideoPreset.highQuality.profile().resolvedContainer(for: .mov) == .mov)
+        #expect(OutputFormat.mov.resolvedFormat(for: .mp4, videoProfile: VideoPreset.highQuality.profile()) == .mp4)
+    }
+
+    @Test("Error status shows a useful label when the message is missing")
+    func errorDisplay() throws {
+        #expect(ItemStatus.error.displayLabel(error: nil) == "Export failed")
+        #expect(ItemStatus.error.displayLabel(error: "   ") == "Export failed")
+        #expect(
+            ItemStatus.error.displayLabel(error: "No compatible local video export preset is available")
+                == "No compatible local video export preset is available"
+        )
+        #expect(ItemStatus.completed.displayLabel(error: "ignored") == "Done")
+        #expect(!ProcessingErrorMessage.fromFailure(UkigumuSqueezeError.videoExportUnavailable).isEmpty)
+        #expect(
+            ProcessingErrorMessage.fromFailure(UkigumuSqueezeError.videoExportIncompatible(.mov))
+                .contains("MP4")
+        )
+        struct BlankError: Error {}
+        #expect(!ProcessingErrorMessage.fromFailure(BlankError()).isEmpty)
+        let plan = try #require(
+            try OutputPlanner().plan(
+                images: [fixture(relativePath: "clip.mov", format: .mov)],
+                options: ProcessingOptions()
+            ).first
+        )
+        let missing = ProcessingResult.failure(plan: plan, status: .error, error: nil)
+        #expect(missing.error == "Export failed")
+        #expect(missing.status.displayLabel(error: missing.error) == "Export failed")
     }
 
     @Test("Video format selection leaves photos unchanged")
@@ -190,6 +247,19 @@ struct CoreTests {
         #expect(VideoPreset.smallerFile.profile().audio == "AAC")
         #expect(VideoPreset.highQuality.profile().codec == .hevc)
         #expect(VideoPreset.social.profile().optimizeForSharing)
+        #expect(VideoPreset.fast1080p.tradeoff.contains("MP4"))
+        #expect(VideoPreset.smallerFile.tradeoff.contains("MP4"))
+    }
+
+    @Test("Temporary video outputs use the planned container extension")
+    func temporaryVideoExtension() {
+        let url = TemporaryOutput.url(
+            adjacentTo: URL(filePath: "/tmp/out.mov"),
+            pathExtension: MediaFormat.mp4.preferredExtension
+        )
+        #expect(url.pathExtension == "mp4")
+        #expect(url.lastPathComponent.hasPrefix(".ukigumu-squeeze-"))
+        #expect(TemporaryOutput.url(adjacentTo: URL(filePath: "/tmp/out.jpg")).pathExtension == "tmp")
     }
 
     @Test("Video presets map to AVFoundation export presets")

@@ -62,6 +62,10 @@ final class AppModel {
         BatchSummary(results: Array(results.values))
     }
 
+    var videoProfile: VideoEncodeProfile {
+        videoPreset.profile(customCap: videoResolutionCap, customLean: videoQualityLean)
+    }
+
     func add(_ urls: [URL]) {
         let unique = urls.filter { candidate in
             !inputs.contains { $0.standardizedFileURL == candidate.standardizedFileURL }
