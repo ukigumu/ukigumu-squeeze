@@ -344,9 +344,9 @@ public actor VideoProcessor {
 
     private static func fileTypes(for format: MediaFormat) -> [AVFileType] {
         switch format {
-        case .mov: [.mov]
-        case .m4v: [.m4v, .mp4]
-        default: [.mp4, .m4v]
+        case .mov: return [.mov]
+        case .m4v: return [.m4v, .mp4]
+        default: return [.mp4, .m4v]
         }
     }
 

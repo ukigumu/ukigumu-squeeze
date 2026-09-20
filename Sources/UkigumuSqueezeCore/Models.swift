@@ -360,13 +360,15 @@ public enum ItemStatus: String, Codable, Sendable {
     case pending, processing, completed, noImprovement, cancelled, error
 
     public func displayLabel() -> String {
+        // Explicit returns: Swift 6 on Xcode 26 cannot treat a mixed
+        // implicit/explicit switch as a single-expression String body.
         switch self {
-        case .pending: "Waiting"
-        case .processing: "Encoding"
-        case .completed: "Done"
-        case .noImprovement: "No change"
-        case .cancelled: "Cancelled"
-        case .error: "Error"
+        case .pending: return "Waiting"
+        case .processing: return "Encoding"
+        case .completed: return "Done"
+        case .noImprovement: return "No change"
+        case .cancelled: return "Cancelled"
+        case .error: return "Error"
         }
     }
 
