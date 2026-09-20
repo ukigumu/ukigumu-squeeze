@@ -196,6 +196,120 @@ struct ProcessingTests {
         #expect(CGImageSourceGetCount(output) == 3)
     }
 
+    @Test("Destination leaves source video untouched")
+    func destinationVideoProcessing() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let destination = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: videoFixture, to: root.appending(path: "clip.mp4"))
+        let item = try #require(FileDiscovery().discover(at: [root]).first)
+        #expect(item.format == .mp4)
+        let options = ProcessingOptions(outputFormat: .mp4, destinationURL: destination, videoPreset: .smallerFile)
+        let plan = try #require(OutputPlanner().plan(images: [item], options: options).first)
+
+        let result = await VideoProcessor().process(plan, options: options)
+
+        #expect(result.status == .completed, "\(result.error ?? "Unknown processing error")")
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "clip.mp4").path))
+        #expect(FileManager.default.fileExists(atPath: destination.appending(path: "clip.mp4").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appending(path: "original").path))
+        #expect(result.finalFormat == .mp4)
+        #expect(result.finalBytes > 0)
+    }
+
+    @Test("Without destination moves original video and writes a replacement")
+    func inPlaceVideoProcessing() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "nested/clip.mp4")
+        try FileManager.default.createDirectory(at: source.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: videoFixture, to: source)
+        let item = try #require(FileDiscovery().discover(at: [root]).first)
+        let options = ProcessingOptions(outputFormat: .mp4, videoPreset: .fast1080p)
+        let plan = try #require(OutputPlanner().plan(images: [item], options: options).first)
+
+        let result = await VideoProcessor().process(plan, options: options)
+
+        #expect(result.status == .completed, "\(result.error ?? "Unknown processing error")")
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "original/nested/clip.mp4").path))
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "nested/clip.mp4").path))
+        #expect(try Data(contentsOf: root.appending(path: "original/nested/clip.mp4")) == Data(contentsOf: videoFixture))
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: source.deletingLastPathComponent().path)
+        #expect(!leftovers.contains { $0.hasPrefix(".ukigumu-squeeze-") })
+    }
+
+    @Test("Mixed photo and video batch keeps each media on its path")
+    func mixedBatch() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let destination = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try makePNG(at: root.appending(path: "photo.png"), width: 16, height: 12)
+        try FileManager.default.copyItem(at: videoFixture, to: root.appending(path: "clip.mp4"))
+        let items = FileDiscovery().discover(at: [root])
+        #expect(items.count == 2)
+        let options = ProcessingOptions(outputFormat: .jpeg, destinationURL: destination, videoPreset: .fast1080p)
+        let plans = try OutputPlanner().plan(images: items, options: options)
+
+        let results = await BatchProcessor().process(plans: plans, options: options) { _ in }
+
+        #expect(results.count == 2)
+        #expect(results.allSatisfy { $0.status == .completed }, results.map { $0.error ?? $0.status.rawValue }.joined())
+        #expect(FileManager.default.fileExists(atPath: destination.appending(path: "photo.jpg").path))
+        #expect(FileManager.default.fileExists(atPath: destination.appending(path: "clip.mp4").path))
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "photo.png").path))
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "clip.mp4").path))
+    }
+
+    @Test("Smaller file preset caps a 1080p source at 720p")
+    func smallerFilePresetCapsResolution() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let destination = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: hdVideoFixture, to: root.appending(path: "clip.mp4"))
+        let item = try #require(FileDiscovery().discover(at: [root]).first)
+        let options = ProcessingOptions(
+            outputFormat: .mp4,
+            destinationURL: destination,
+            videoPreset: .smallerFile
+        )
+        let plan = try #require(OutputPlanner().plan(images: [item], options: options).first)
+
+        let result = await VideoProcessor().process(plan, options: options)
+
+        #expect(result.status == .completed, "\(result.error ?? "Unknown processing error")")
+        #expect(result.width == 1280)
+        #expect(result.height == 720)
+    }
+
+    private var videoFixture: URL {
+        videoRoot.appending(path: "solid.mp4")
+    }
+
+    private var hdVideoFixture: URL {
+        videoRoot.appending(path: "hd.mp4")
+    }
+
+    private var videoRoot: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: "TestFixtures/Sources/Video")
+    }
+
     private func makePNG(at url: URL, width: Int, height: Int) throws {
         let context = CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,

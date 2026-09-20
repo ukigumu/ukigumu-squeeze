@@ -45,7 +45,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Ukigumu Squeeze")
                     .font(.title2.weight(.bold))
-                Text("Local image compression. Nothing leaves your Mac.")
+                Text("Local photo and video compression. Nothing leaves your Mac.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -70,14 +70,14 @@ struct ContentView: View {
             ZStack {
                 Circle()
                     .fill(forestGreen.opacity(isTargeted ? 0.18 : 0.10))
-                Image(systemName: isTargeted ? "arrow.down.circle.fill" : "photo.on.rectangle.angled")
+                Image(systemName: isTargeted ? "arrow.down.circle.fill" : "rectangle.stack.badge.play")
                     .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(forestGreen)
             }
             .frame(width: 54, height: 54)
 
             VStack(spacing: 4) {
-                Text(isTargeted ? "Release to add" : "Drop images or folders")
+                Text(isTargeted ? "Release to add" : "Drop photos, videos, or folders")
                     .font(.headline)
                 Text("Folders are scanned recursively")
                     .font(.caption)
@@ -118,7 +118,7 @@ struct ContentView: View {
                 VStack(spacing: 4) {
                     Text("Your queue is empty")
                         .font(.headline)
-                    Text("Added images will appear here, ready to compress.")
+                    Text("Added photos and videos will appear here, ready to compress.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -133,9 +133,9 @@ struct ContentView: View {
             .accessibilityIdentifier("itemsTable")
         } else {
             Table(model.items) {
-                TableColumn("Image") { item in
+                TableColumn("File") { item in
                     HStack(spacing: 10) {
-                        Image(systemName: "photo")
+                        Image(systemName: item.format.kind == .video ? "film" : "photo")
                             .foregroundStyle(forestGreen)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.sourceURL.lastPathComponent)
@@ -147,8 +147,15 @@ struct ContentView: View {
                     }
                 }
                 TableColumn("Format") { item in
-                    Text("\(item.format.rawValue.uppercased()) → \(finalFormat(for: item).rawValue.uppercased())")
-                }.width(110)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(item.format.rawValue.uppercased()) → \(finalFormat(for: item).rawValue.uppercased())")
+                        if item.format.kind == .video {
+                            Text(model.videoPreset.title)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }.width(130)
                 TableColumn("Before") { item in
                     Text(ByteCountFormatter.string(fromByteCount: item.byteCount, countStyle: .file))
                 }.width(70)
@@ -157,10 +164,21 @@ struct ContentView: View {
                         .foregroundStyle(model.results[item.id] == nil ? .secondary : .primary)
                 }.width(70)
                 TableColumn("Status") { item in
-                    Label(status(for: item).rawValue, systemImage: statusSymbol(for: item))
-                        .foregroundStyle(statusColor(for: item))
-                        .help(model.results[item.id]?.error ?? status(for: item).rawValue)
-                }.width(110)
+                    if status(for: item) == .processing, let fraction = model.itemProgress[item.id] {
+                        HStack(spacing: 6) {
+                            ProgressView(value: fraction)
+                                .frame(width: 46)
+                            Text("\(Int(fraction * 100))%")
+                                .monospacedDigit()
+                                .font(.caption)
+                        }
+                        .help("Encoding")
+                    } else {
+                        Label(statusLabel(for: item), systemImage: statusSymbol(for: item))
+                            .foregroundStyle(statusColor(for: item))
+                            .help(model.results[item.id]?.error ?? statusLabel(for: item))
+                    }
+                }.width(120)
             }
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay {
@@ -175,10 +193,89 @@ struct ContentView: View {
     private var settings: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                settingsSection("Video", systemImage: "film") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Presets")
+                            .font(.subheadline.weight(.medium))
+                        VStack(spacing: 8) {
+                            ForEach(VideoPreset.allCases, id: \.self) { preset in
+                                Button {
+                                    model.videoPreset = preset
+                                } label: {
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Image(systemName: model.videoPreset == preset ? "largecircle.fill.circle" : "circle")
+                                            .foregroundStyle(forestGreen)
+                                            .padding(.top, 1)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(preset.title)
+                                                .fontWeight(.medium)
+                                                .foregroundStyle(.primary)
+                                            Text(preset.tradeoff)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                            Text(recipe(for: preset))
+                                                .font(.caption2)
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(model.videoPreset == preset ? forestGreen.opacity(0.10) : Color.clear)
+                                    )
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(model.videoPreset == preset ? forestGreen.opacity(0.45) : Color.primary.opacity(0.06))
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("videoPreset-\(preset.rawValue)")
+                            }
+                        }
+                        if model.videoPreset == .custom {
+                            Picker("Cap", selection: $model.videoResolutionCap) {
+                                ForEach(VideoResolutionCap.allCases, id: \.self) { cap in
+                                    Text(cap.title).tag(cap)
+                                }
+                            }
+                            .accessibilityIdentifier("videoCustomCapPicker")
+                            Picker("Quality", selection: $model.videoQualityLean) {
+                                ForEach(VideoQualityLean.allCases, id: \.self) { lean in
+                                    Text(lean.title).tag(lean)
+                                }
+                            }
+                            .accessibilityIdentifier("videoCustomLeanPicker")
+                        }
+                        VStack(spacing: 4) {
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.primary.opacity(0.08))
+                                        .frame(height: 6)
+                                    Capsule()
+                                        .fill(forestGreen)
+                                        .frame(width: max(8, geometry.size.width * videoTradeoffPosition), height: 6)
+                                }
+                            }
+                            .frame(height: 6)
+                            HStack {
+                                Text("Smaller file")
+                                Spacer()
+                                Text("Higher quality")
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                        .accessibilityIdentifier("videoPresetTradeoff")
+                    }
+                }
+
                 settingsSection("Compression", systemImage: "slider.horizontal.3") {
                     VStack(spacing: 14) {
                         HStack {
-                            Text("Quality")
+                            Text("Photo quality")
                             Spacer()
                             Text("\(Int(model.quality * 100))%")
                                 .monospacedDigit()
@@ -187,11 +284,19 @@ struct ContentView: View {
                         Slider(value: $model.quality, in: 0.1...1, step: 0.05)
                             .tint(forestGreen)
                             .accessibilityIdentifier("qualitySlider")
+                        Text("Photos use this slider. Videos use the preset above.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         Divider()
                         Picker("Format", selection: $model.outputFormat) {
                             Text("Keep original").tag(OutputFormat.original)
-                            ForEach(OutputFormat.allCases.filter { $0 != .original }, id: \.self) {
-                                Text($0.rawValue.uppercased()).tag($0)
+                            Divider()
+                            ForEach(OutputFormat.photoFormats, id: \.self) { format in
+                                Text(format.rawValue.uppercased()).tag(format)
+                            }
+                            Divider()
+                            ForEach(OutputFormat.videoFormats, id: \.self) { format in
+                                Text(format.rawValue.uppercased()).tag(format)
                             }
                         }
                         .accessibilityIdentifier("formatPicker")
@@ -207,6 +312,9 @@ struct ContentView: View {
 
                 settingsSection("Resolution", systemImage: "aspectratio") {
                     VStack(alignment: .leading, spacing: 12) {
+                        Text("Photos only. Video size comes from the selected preset.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         Picker("Resize", selection: $model.resolutionMode) {
                             ForEach(ResolutionMode.allCases, id: \.self) { mode in
                                 Text(resolutionLabel(mode)).tag(mode)
@@ -251,7 +359,7 @@ struct ContentView: View {
                     }
                 }
 
-                settingsSection("Batch", systemImage: "chart.bar") {
+                settingsSection("Queue", systemImage: "list.bullet.rectangle") {
                     VStack(spacing: 11) {
                         summaryRow("Files", "\(model.items.count)")
                         Divider()
@@ -300,8 +408,8 @@ struct ContentView: View {
                     .monospacedDigit()
             } else {
                 Label(
-                    model.items.isEmpty ? "Ready for images" : "\(model.items.count) item\(model.items.count == 1 ? "" : "s") ready",
-                    systemImage: model.items.isEmpty ? "checkmark.circle" : "photo.stack"
+                    model.items.isEmpty ? "Queue is empty" : "\(model.items.count) in queue",
+                    systemImage: model.items.isEmpty ? "checkmark.circle" : "square.stack"
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -382,26 +490,58 @@ struct ContentView: View {
 
     private var resolutionHelp: String {
         switch model.resolutionMode {
-        case .customWidth: "Height is calculated automatically. Images are never enlarged."
-        case .customHeight: "Width is calculated automatically. Images are never enlarged."
-        case .fit: "Fits inside this box while preserving aspect ratio. Images are never enlarged."
-        case .exact: "Uses the exact width and height and may change the aspect ratio. Images are never enlarged."
+        case .customWidth: "Height is calculated automatically. Files are never enlarged."
+        case .customHeight: "Width is calculated automatically. Files are never enlarged."
+        case .fit: "Fits inside this box while preserving aspect ratio. Files are never enlarged."
+        case .exact: "Uses the exact width and height and may change the aspect ratio. Files are never enlarged."
         default: "Reduces both dimensions while preserving aspect ratio."
         }
     }
 
-    private func status(for item: DiscoveredImage) -> ItemStatus {
-        model.results[item.id]?.status ?? (model.isProcessing ? .processing : .pending)
+    private var videoTradeoffPosition: CGFloat {
+        switch model.videoPreset {
+        case .smallerFile: 0.16
+        case .social: 0.34
+        case .fast1080p: 0.55
+        case .custom:
+            switch model.videoQualityLean {
+            case .smaller: 0.22
+            case .balanced: 0.55
+            case .higher: 0.88
+            }
+        case .highQuality: 1
+        }
     }
 
-    private func finalFormat(for item: DiscoveredImage) -> ImageFormat {
-        model.outputFormat.imageFormat ?? item.format
+    private func recipe(for preset: VideoPreset) -> String {
+        preset.profile(customCap: model.videoResolutionCap, customLean: model.videoQualityLean).recipe
+    }
+
+    private func status(for item: DiscoveredImage) -> ItemStatus {
+        if let result = model.results[item.id] { return result.status }
+        if model.itemProgress[item.id] != nil { return .processing }
+        return .pending
+    }
+
+    private func statusLabel(for item: DiscoveredImage) -> String {
+        switch status(for: item) {
+        case .pending: "Waiting"
+        case .processing: "Encoding"
+        case .completed: "Done"
+        case .noImprovement: "No change"
+        case .cancelled: "Cancelled"
+        case .error: "Error"
+        }
+    }
+
+    private func finalFormat(for item: DiscoveredImage) -> MediaFormat {
+        model.outputFormat.resolvedFormat(for: item.format)
     }
 
     private func finalSize(for item: DiscoveredImage) -> String {
         guard let result = model.results[item.id],
               result.status == .completed || result.status == .noImprovement else {
-            return "—"
+            return "-"
         }
         return ByteCountFormatter.string(fromByteCount: result.finalBytes, countStyle: .file)
     }

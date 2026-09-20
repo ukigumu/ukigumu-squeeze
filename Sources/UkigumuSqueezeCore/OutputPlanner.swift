@@ -5,7 +5,7 @@ public struct PlannedOutput: Sendable {
     public let outputURL: URL
     public let backupURL: URL?
     public let relativeOutputPath: String
-    public let finalFormat: ImageFormat
+    public let finalFormat: MediaFormat
 }
 
 public struct OutputPlanner: Sendable {
@@ -14,8 +14,8 @@ public struct OutputPlanner: Sendable {
     public func plan(images: [DiscoveredImage], options: ProcessingOptions) throws -> [PlannedOutput] {
         var claimed = Set<String>()
         return try images.map { image in
-            let finalFormat = options.outputFormat.imageFormat ?? image.format
-            let relativeOutput = outputPath(for: image, format: finalFormat, converting: options.outputFormat != .original)
+            let finalFormat = options.outputFormat.resolvedFormat(for: image.format)
+            let relativeOutput = outputPath(for: image, format: finalFormat, converting: finalFormat != image.format)
             let outputRoot = options.destinationURL ?? image.rootURL
             let output = outputRoot.appending(path: relativeOutput)
             let key = output.standardizedFileURL.path.lowercased()
@@ -48,7 +48,7 @@ public struct OutputPlanner: Sendable {
         }
     }
 
-    private func outputPath(for image: DiscoveredImage, format: ImageFormat, converting: Bool) -> String {
+    private func outputPath(for image: DiscoveredImage, format: MediaFormat, converting: Bool) -> String {
         guard converting else { return image.relativePath }
         let path = image.relativePath as NSString
         return path.deletingPathExtension + "." + format.preferredExtension

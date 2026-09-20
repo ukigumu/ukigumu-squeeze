@@ -17,6 +17,10 @@ final class AppModel {
     var resolutionMode = ResolutionMode.original
     var resolutionWidth = 1920
     var resolutionHeight = 1080
+    var videoPreset = VideoPreset.fast1080p
+    var videoResolutionCap = VideoResolutionCap.p1080
+    var videoQualityLean = VideoQualityLean.balanced
+    var itemProgress: [UUID: Double] = [:]
     var destinationURL: URL?
     var isProcessing = false
     var errorMessage: String?
@@ -35,6 +39,15 @@ final class AppModel {
             destinationURL = environment["UKIGUMU_SQUEEZE_TEST_DESTINATION"].map { URL(filePath: $0) }
             if let format = environment["UKIGUMU_SQUEEZE_TEST_FORMAT"].flatMap(OutputFormat.init(rawValue:)) {
                 outputFormat = format
+            }
+            if let preset = environment["UKIGUMU_SQUEEZE_TEST_VIDEO_PRESET"].flatMap(VideoPreset.init(rawValue:)) {
+                videoPreset = preset
+            }
+            if let cap = environment["UKIGUMU_SQUEEZE_TEST_VIDEO_CAP"].flatMap(VideoResolutionCap.init(rawValue:)) {
+                videoResolutionCap = cap
+            }
+            if let lean = environment["UKIGUMU_SQUEEZE_TEST_VIDEO_LEAN"].flatMap(VideoQualityLean.init(rawValue:)) {
+                videoQualityLean = lean
             }
             preserveMetadata = environment["UKIGUMU_SQUEEZE_TEST_PRESERVE_METADATA"] != "0"
             exportJSON = environment["UKIGUMU_SQUEEZE_TEST_EXPORT_JSON"] == "1"
@@ -110,6 +123,7 @@ final class AppModel {
     func refresh() {
         items = FileDiscovery().discover(at: inputs, excluding: destinationURL)
         results = [:]
+        itemProgress = [:]
     }
 
     func compress() {
@@ -119,6 +133,7 @@ final class AppModel {
         isProcessing = true
         errorMessage = nil
         results = [:]
+        itemProgress = [:]
         let options = ProcessingOptions(
             quality: quality,
             outputFormat: outputFormat,
@@ -127,17 +142,28 @@ final class AppModel {
             destinationURL: destinationURL,
             resolutionMode: resolutionMode,
             resolutionWidth: resolutionWidth,
-            resolutionHeight: resolutionHeight
+            resolutionHeight: resolutionHeight,
+            videoPreset: videoPreset,
+            videoResolutionCap: videoResolutionCap,
+            videoQualityLean: videoQualityLean
         )
         do {
             let planner = OutputPlanner()
             if destinationURL == nil { try planner.validateOriginalFolders(for: items) }
             let plans = try planner.plan(images: items, options: options)
             Task {
-                let completed = await batchProcessor.process(plans: plans, options: options) { [weak self] result in
-                    guard self?.activeBatchID == batchID else { return }
-                    self?.results[result.id] = result
-                }
+                let completed = await batchProcessor.process(
+                    plans: plans,
+                    options: options,
+                    progress: { [weak self] result in
+                        guard self?.activeBatchID == batchID else { return }
+                        self?.results[result.id] = result
+                    },
+                    itemProgress: { [weak self] id, fraction in
+                        guard self?.activeBatchID == batchID else { return }
+                        self?.itemProgress[id] = fraction
+                    }
+                )
                 guard self.activeBatchID == batchID else { return }
                 if options.exportJSON {
                     do { try self.writeReports(completed, options: options) }

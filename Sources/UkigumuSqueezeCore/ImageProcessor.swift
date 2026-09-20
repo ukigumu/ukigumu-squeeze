@@ -29,8 +29,10 @@ public actor ImageProcessor {
                 height: options.resolutionHeight
             )
             let resizedImage = try resize(image, to: targetSize)
-            let temporary = plan.outputURL.deletingLastPathComponent()
-                .appending(path: ".ukigumu-squeeze-\(UUID().uuidString).tmp")
+            guard let finalImageFormat = plan.finalFormat.imageFormat else {
+                throw UkigumuSqueezeError.invalidImage(plan.image.sourceURL)
+            }
+            let temporary = TemporaryOutput.url(adjacentTo: plan.outputURL)
             defer { try? fileManager.removeItem(at: temporary) }
 
             try fileManager.createDirectory(at: temporary.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -38,16 +40,16 @@ public actor ImageProcessor {
                 resizedImage, source: source,
                 sourceProperties: properties,
                 to: temporary,
-                format: plan.finalFormat,
+                format: finalImageFormat,
                 quality: options.quality,
                 preserveMetadata: options.preserveMetadata,
                 resolutionMode: options.resolutionMode,
                 resolutionWidth: options.resolutionWidth,
                 resolutionHeight: options.resolutionHeight
             )
-            let expectedPageCount = plan.finalFormat == .tiff ? CGImageSourceGetCount(source) : 1
+            let expectedPageCount = finalImageFormat == .tiff ? CGImageSourceGetCount(source) : 1
             try validate(
-                temporary, expectedFormat: plan.finalFormat,
+                temporary, expectedFormat: finalImageFormat,
                 width: targetSize.width, height: targetSize.height, expectedPageCount: expectedPageCount
             )
             try Task.checkCancellation()
@@ -59,23 +61,23 @@ public actor ImageProcessor {
                 if options.destinationURL != nil {
                     try fileManager.copyItem(at: plan.image.sourceURL, to: plan.outputURL)
                 }
-                return result(
+                return ProcessingResult.success(
                     plan: plan, width: targetSize.width, height: targetSize.height,
                     finalBytes: plan.image.byteCount, metadataAvailable: metadataAvailable,
                     status: .noImprovement
                 )
             }
 
-            try commit(temporary: temporary, plan: plan)
-            return result(
+            try OutputCommitter.commit(temporary: temporary, plan: plan, fileManager: fileManager)
+            return ProcessingResult.success(
                 plan: plan, width: targetSize.width, height: targetSize.height,
                 finalBytes: encodedSize, metadataAvailable: metadataAvailable,
                 status: .completed
             )
         } catch is CancellationError {
-            return failure(plan: plan, status: .cancelled, error: nil)
+            return ProcessingResult.failure(plan: plan, status: .cancelled, error: nil)
         } catch {
-            return failure(plan: plan, status: .error, error: error.localizedDescription)
+            return ProcessingResult.failure(plan: plan, status: .error, error: error.localizedDescription)
         }
     }
 
@@ -170,63 +172,6 @@ public actor ImageProcessor {
                 || formatsEquivalent(type as String, expectedFormat) else {
             throw UkigumuSqueezeError.validationFailed(url)
         }
-    }
-
-    private func commit(temporary: URL, plan: PlannedOutput) throws {
-        if let backup = plan.backupURL {
-            try fileManager.createDirectory(at: backup.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if fileManager.fileExists(atPath: backup.path) {
-                try fileManager.removeItem(at: backup)
-            }
-            try fileManager.moveItem(at: plan.image.sourceURL, to: backup)
-            do {
-                if plan.outputURL != plan.image.sourceURL,
-                   fileManager.fileExists(atPath: plan.outputURL.path) {
-                    try fileManager.removeItem(at: plan.outputURL)
-                }
-                try fileManager.moveItem(at: temporary, to: plan.outputURL)
-            } catch {
-                try? fileManager.moveItem(at: backup, to: plan.image.sourceURL)
-                throw error
-            }
-        } else {
-            if fileManager.fileExists(atPath: plan.outputURL.path) {
-                _ = try fileManager.replaceItemAt(plan.outputURL, withItemAt: temporary)
-            } else {
-                try fileManager.moveItem(at: temporary, to: plan.outputURL)
-            }
-        }
-    }
-
-    private func result(
-        plan: PlannedOutput, width: Int, height: Int, finalBytes: Int64,
-        metadataAvailable: Bool, status: ItemStatus
-    ) -> ProcessingResult {
-        ProcessingResult(
-            id: plan.image.id,
-            originalRelativePath: plan.image.relativePath,
-            finalRelativePath: plan.relativeOutputPath,
-            originalName: plan.image.sourceURL.lastPathComponent,
-            finalName: plan.outputURL.lastPathComponent,
-            originalFormat: plan.image.format,
-            finalFormat: plan.finalFormat,
-            width: width, height: height,
-            originalBytes: plan.image.byteCount, finalBytes: finalBytes,
-            metadataAvailable: metadataAvailable, status: status, error: nil
-        )
-    }
-
-    private func failure(plan: PlannedOutput, status: ItemStatus, error: String?) -> ProcessingResult {
-        ProcessingResult(
-            id: plan.image.id,
-            originalRelativePath: plan.image.relativePath,
-            finalRelativePath: plan.relativeOutputPath,
-            originalName: plan.image.sourceURL.lastPathComponent,
-            finalName: plan.outputURL.lastPathComponent,
-            originalFormat: plan.image.format, finalFormat: plan.finalFormat,
-            width: 0, height: 0, originalBytes: plan.image.byteCount, finalBytes: 0,
-            metadataAvailable: false, status: status, error: error
-        )
     }
 
     private func uti(for format: ImageFormat) -> CFString {
