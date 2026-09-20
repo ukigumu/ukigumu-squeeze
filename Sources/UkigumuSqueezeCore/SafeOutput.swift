@@ -1,9 +1,11 @@
 import Foundation
 
 enum TemporaryOutput {
-    static func url(adjacentTo outputURL: URL) -> URL {
-        outputURL.deletingLastPathComponent()
-            .appending(path: ".ukigumu-squeeze-\(UUID().uuidString).tmp")
+    static func url(adjacentTo outputURL: URL, pathExtension: String = "tmp") -> URL {
+        let trimmed = pathExtension.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        let ext = trimmed.isEmpty ? "tmp" : trimmed
+        return outputURL.deletingLastPathComponent()
+            .appending(path: ".ukigumu-squeeze-\(UUID().uuidString).\(ext)")
     }
 }
 

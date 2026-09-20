@@ -14,7 +14,10 @@ public struct OutputPlanner: Sendable {
     public func plan(images: [DiscoveredImage], options: ProcessingOptions) throws -> [PlannedOutput] {
         var claimed = Set<String>()
         return try images.map { image in
-            let finalFormat = options.outputFormat.resolvedFormat(for: image.format)
+            let finalFormat = options.outputFormat.resolvedFormat(
+                for: image.format,
+                videoProfile: options.videoProfile
+            )
             let relativeOutput = outputPath(for: image, format: finalFormat, converting: finalFormat != image.format)
             let outputRoot = options.destinationURL ?? image.rootURL
             let output = outputRoot.appending(path: relativeOutput)

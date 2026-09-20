@@ -62,6 +62,34 @@ final class AppModel {
         BatchSummary(results: Array(results.values))
     }
 
+    var videoProfile: VideoEncodeProfile {
+        videoPreset.profile(customCap: videoResolutionCap, customLean: videoQualityLean)
+    }
+
+    func result(for id: UUID) -> ProcessingResult? {
+        results[id]
+    }
+
+    func itemStatus(for id: UUID) -> ItemStatus {
+        if let result = results[id] { return result.status }
+        if itemProgress[id] != nil { return .processing }
+        return .pending
+    }
+
+    func statusTitle(for id: UUID) -> String {
+        itemStatus(for: id).displayLabel()
+    }
+
+    func statusDetail(for id: UUID) -> String? {
+        itemStatus(for: id).displayDetail(error: results[id]?.error)
+    }
+
+    func presentStatusDetail(for id: UUID) {
+        if let detail = statusDetail(for: id) {
+            errorMessage = detail
+        }
+    }
+
     func add(_ urls: [URL]) {
         let unique = urls.filter { candidate in
             !inputs.contains { $0.standardizedFileURL == candidate.standardizedFileURL }

@@ -161,24 +161,11 @@ struct ContentView: View {
                 }.width(70)
                 TableColumn("After") { item in
                     Text(finalSize(for: item))
-                        .foregroundStyle(model.results[item.id] == nil ? .secondary : .primary)
+                        .foregroundStyle(model.result(for: item.id) == nil ? .secondary : .primary)
                 }.width(70)
                 TableColumn("Status") { item in
-                    if status(for: item) == .processing, let fraction = model.itemProgress[item.id] {
-                        HStack(spacing: 6) {
-                            ProgressView(value: fraction)
-                                .frame(width: 46)
-                            Text("\(Int(fraction * 100))%")
-                                .monospacedDigit()
-                                .font(.caption)
-                        }
-                        .help("Encoding")
-                    } else {
-                        Label(statusLabel(for: item), systemImage: statusSymbol(for: item))
-                            .foregroundStyle(statusColor(for: item))
-                            .help(model.results[item.id]?.error ?? statusLabel(for: item))
-                    }
-                }.width(120)
+                    statusCell(for: item)
+                }.width(min: 180, ideal: 260, max: 420)
             }
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay {
@@ -517,37 +504,79 @@ struct ContentView: View {
         preset.profile(customCap: model.videoResolutionCap, customLean: model.videoQualityLean).recipe
     }
 
-    private func status(for item: DiscoveredImage) -> ItemStatus {
-        if let result = model.results[item.id] { return result.status }
-        if model.itemProgress[item.id] != nil { return .processing }
-        return .pending
-    }
-
-    private func statusLabel(for item: DiscoveredImage) -> String {
-        switch status(for: item) {
-        case .pending: "Waiting"
-        case .processing: "Encoding"
-        case .completed: "Done"
-        case .noImprovement: "No change"
-        case .cancelled: "Cancelled"
-        case .error: "Error"
+    @ViewBuilder
+    private func statusCell(for item: DiscoveredImage) -> some View {
+        let current = model.itemStatus(for: item.id)
+        if current == .processing, let fraction = model.itemProgress[item.id] {
+            HStack(spacing: 6) {
+                ProgressView(value: fraction)
+                    .frame(width: 46)
+                Text("\(Int(fraction * 100))%")
+                    .monospacedDigit()
+                    .font(.caption)
+            }
+            .help("Encoding")
+        } else {
+            let title = model.statusTitle(for: item.id)
+            let detail = model.statusDetail(for: item.id)
+            if let detail {
+                Button {
+                    model.presentStatusDetail(for: item.id)
+                } label: {
+                    statusContent(title: title, detail: detail, status: current)
+                }
+                .buttonStyle(.plain)
+                .help(detail)
+                .accessibilityIdentifier("itemStatusErrorButton")
+                .accessibilityLabel(title)
+                .accessibilityValue(detail)
+            } else {
+                statusContent(title: title, detail: nil, status: current)
+                    .help(title)
+                    .accessibilityLabel(title)
+            }
         }
     }
 
+    private func statusContent(title: String, detail: String?, status: ItemStatus) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label(title, systemImage: statusSymbol(for: status))
+                    .foregroundStyle(statusColor(for: status))
+                    .lineLimit(1)
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("itemStatusDetail")
+                }
+            }
+            if detail != nil {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
     private func finalFormat(for item: DiscoveredImage) -> MediaFormat {
-        model.outputFormat.resolvedFormat(for: item.format)
+        model.outputFormat.resolvedFormat(for: item.format, videoProfile: model.videoProfile)
     }
 
     private func finalSize(for item: DiscoveredImage) -> String {
-        guard let result = model.results[item.id],
+        guard let result = model.result(for: item.id),
               result.status == .completed || result.status == .noImprovement else {
             return "-"
         }
         return ByteCountFormatter.string(fromByteCount: result.finalBytes, countStyle: .file)
     }
 
-    private func statusSymbol(for item: DiscoveredImage) -> String {
-        switch status(for: item) {
+    private func statusSymbol(for status: ItemStatus) -> String {
+        switch status {
         case .pending: "clock"
         case .processing: "arrow.triangle.2.circlepath"
         case .completed: "checkmark.circle.fill"
@@ -557,8 +586,8 @@ struct ContentView: View {
         }
     }
 
-    private func statusColor(for item: DiscoveredImage) -> Color {
-        switch status(for: item) {
+    private func statusColor(for status: ItemStatus) -> Color {
+        switch status {
         case .completed: forestGreen
         case .error: .red
         default: .secondary

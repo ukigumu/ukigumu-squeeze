@@ -51,6 +51,12 @@ public actor VideoProcessor {
         options: ProcessingOptions,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async -> ProcessingResult {
+        let sourceAccess = plan.image.sourceURL.startAccessingSecurityScopedResource()
+        let rootAccess = plan.image.rootURL.startAccessingSecurityScopedResource()
+        defer {
+            if sourceAccess { plan.image.sourceURL.stopAccessingSecurityScopedResource() }
+            if rootAccess { plan.image.rootURL.stopAccessingSecurityScopedResource() }
+        }
         do {
             try Task.checkCancellation()
             progress?(0.02)
@@ -73,7 +79,10 @@ public actor VideoProcessor {
             )
             let resized = targetSize.width != sourceWidth || targetSize.height != sourceHeight
 
-            let temporary = TemporaryOutput.url(adjacentTo: plan.outputURL)
+            let temporary = TemporaryOutput.url(
+                adjacentTo: plan.outputURL,
+                pathExtension: plan.finalFormat.preferredExtension
+            )
             defer { try? fileManager.removeItem(at: temporary) }
             try fileManager.createDirectory(at: temporary.deletingLastPathComponent(), withIntermediateDirectories: true)
             try await export(
@@ -117,7 +126,11 @@ public actor VideoProcessor {
         } catch is CancellationError {
             return ProcessingResult.failure(plan: plan, status: .cancelled, error: nil)
         } catch {
-            return ProcessingResult.failure(plan: plan, status: .error, error: error.localizedDescription)
+            return ProcessingResult.failure(
+                plan: plan,
+                status: .error,
+                error: ProcessingErrorMessage.fromFailure(error)
+            )
         }
     }
 
@@ -135,44 +148,63 @@ public actor VideoProcessor {
         resized: Bool,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
-        let fileType = Self.fileType(for: format)
         let compatible = AVAssetExportSession.exportPresets(compatibleWith: asset)
-        let presets = VideoPresetSelector.preferredExportPresets(for: profile)
+        var presets = VideoPresetSelector.preferredExportPresets(for: profile)
             .filter { compatible.contains($0) }
+        if let fallback = VideoPresetSelector.choose(profile: profile, compatible: compatible),
+           !presets.contains(fallback) {
+            presets.append(fallback)
+        }
         var lastError: Error = UkigumuSqueezeError.videoExportUnavailable
+        var attempted = false
+        let fileTypes = Self.fileTypes(for: format)
 
         for preset in presets {
-            guard let session = AVAssetExportSession(asset: asset, presetName: preset),
-                  session.supportedFileTypes.contains(fileType) else { continue }
-            if fileManager.fileExists(atPath: url.path) {
-                try fileManager.removeItem(at: url)
+            guard let probe = AVAssetExportSession(asset: asset, presetName: preset) else { continue }
+            guard let fileType = await Self.selectFileType(
+                probe: probe,
+                asset: asset,
+                preset: preset,
+                preferred: fileTypes
+            ) else {
+                lastError = UkigumuSqueezeError.videoExportIncompatible(format)
+                continue
             }
-            session.outputURL = url
-            session.outputFileType = fileType
-            session.shouldOptimizeForNetworkUse = true
-            if !preserveMetadata {
-                session.metadataItemFilter = .forSharing()
-            }
-            if resized {
-                session.videoComposition = try await makeComposition(
-                    videoTrack: videoTrack,
-                    duration: duration,
-                    preferredTransform: preferredTransform,
-                    naturalSize: naturalSize,
-                    targetSize: targetSize
-                )
-            }
+            let compositionPasses = resized ? [true] : [false, true]
+            for useComposition in compositionPasses {
+                guard let session = AVAssetExportSession(asset: asset, presetName: preset) else { continue }
+                if fileManager.fileExists(atPath: url.path) {
+                    try fileManager.removeItem(at: url)
+                }
+                session.outputURL = url
+                session.outputFileType = fileType
+                session.shouldOptimizeForNetworkUse = profile.optimizeForSharing
+                if !preserveMetadata {
+                    session.metadataItemFilter = .forSharing()
+                }
+                if useComposition {
+                    session.videoComposition = try await makeComposition(
+                        videoTrack: videoTrack,
+                        duration: duration,
+                        preferredTransform: preferredTransform,
+                        naturalSize: naturalSize,
+                        targetSize: targetSize,
+                        applyStandardDefinitionColor: profile.codec == .h264
+                    )
+                }
 
-            do {
-                try await export(session, to: url, progress: progress)
-                return
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                lastError = error
+                attempted = true
+                do {
+                    try await export(session, to: url, progress: progress)
+                    return
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    lastError = error
+                }
             }
         }
-        throw lastError
+        throw attempted ? lastError : UkigumuSqueezeError.videoExportIncompatible(format)
     }
 
     private func export(
@@ -220,7 +252,8 @@ public actor VideoProcessor {
         duration: CMTime,
         preferredTransform: CGAffineTransform,
         naturalSize: CGSize,
-        targetSize: PixelSize
+        targetSize: PixelSize,
+        applyStandardDefinitionColor: Bool
     ) async throws -> AVVideoComposition {
         let instruction = AVMutableVideoCompositionInstruction()
         instruction.timeRange = CMTimeRange(start: .zero, duration: duration.isNumeric && duration.seconds > 0 ? duration : CMTime(seconds: 1, preferredTimescale: 600))
@@ -233,10 +266,17 @@ public actor VideoProcessor {
 
         let composition = AVMutableVideoComposition()
         composition.renderSize = CGSize(width: targetSize.width, height: targetSize.height)
+        composition.renderScale = 1
         let frameRate = try await videoTrack.load(.nominalFrameRate)
-        let timescale = Int32(max(1, frameRate.rounded()))
+        let fps = frameRate.isFinite && frameRate >= 1 ? frameRate : 30
+        let timescale = Int32(min(max(fps.rounded(), 1), 240))
         composition.frameDuration = CMTime(value: 1, timescale: timescale)
         composition.instructions = [instruction]
+        if applyStandardDefinitionColor {
+            composition.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
+            composition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
+            composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+        }
         return composition
     }
 
@@ -302,11 +342,44 @@ public actor VideoProcessor {
         )
     }
 
-    private static func fileType(for format: MediaFormat) -> AVFileType {
+    private static func fileTypes(for format: MediaFormat) -> [AVFileType] {
         switch format {
-        case .mov: .mov
-        case .m4v: .m4v
-        default: .mp4
+        case .mov: return [.mov]
+        case .m4v: return [.m4v, .mp4]
+        default: return [.mp4, .m4v]
+        }
+    }
+
+    private static func selectFileType(
+        probe: AVAssetExportSession,
+        asset: AVAsset,
+        preset: String,
+        preferred: [AVFileType]
+    ) async -> AVFileType? {
+        let supported = Set(probe.supportedFileTypes)
+        var compatible: AVFileType?
+        var listed: AVFileType?
+        for fileType in preferred where supported.contains(fileType) {
+            if listed == nil {
+                listed = fileType
+            }
+            if await isCompatible(preset: preset, asset: asset, fileType: fileType) {
+                compatible = fileType
+                break
+            }
+        }
+        return compatible ?? listed
+    }
+
+    private static func isCompatible(preset: String, asset: AVAsset, fileType: AVFileType) async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAssetExportSession.determineCompatibility(
+                ofExportPreset: preset,
+                with: asset,
+                outputFileType: fileType
+            ) { compatible in
+                continuation.resume(returning: compatible)
+            }
         }
     }
 }

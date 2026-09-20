@@ -269,6 +269,86 @@ struct ProcessingTests {
         #expect(FileManager.default.fileExists(atPath: root.appending(path: "clip.mp4").path))
     }
 
+    @Test("Fast 1080p encodes a MOV source to MP4")
+    func fast1080pMOVSource() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let destination = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: movFixture, to: root.appending(path: "clip.mov"))
+        let item = try #require(FileDiscovery().discover(at: [root]).first)
+        #expect(item.format == .mov)
+        let options = ProcessingOptions(
+            outputFormat: .original,
+            destinationURL: destination,
+            videoPreset: .fast1080p
+        )
+        let plan = try #require(OutputPlanner().plan(images: [item], options: options).first)
+        #expect(plan.finalFormat == .mp4)
+
+        let result = await VideoProcessor().process(plan, options: options)
+
+        #expect(result.status == .completed, "\(result.error ?? "Unknown processing error")")
+        #expect(result.finalFormat == .mp4)
+        #expect(result.error == nil)
+        #expect(FileManager.default.fileExists(atPath: root.appending(path: "clip.mov").path))
+        #expect(FileManager.default.fileExists(atPath: destination.appending(path: "clip.mp4").path))
+        #expect(!FileManager.default.fileExists(atPath: destination.appending(path: "clip.mov").path))
+    }
+
+    @Test("Social encodes a MOV source to a shareable MP4")
+    func socialMOVSource() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let destination = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: movFixture, to: root.appending(path: "clip.mov"))
+        let item = try #require(FileDiscovery().discover(at: [root]).first)
+        let options = ProcessingOptions(
+            outputFormat: .original,
+            destinationURL: destination,
+            videoPreset: .social
+        )
+        let plan = try #require(OutputPlanner().plan(images: [item], options: options).first)
+
+        let result = await VideoProcessor().process(plan, options: options)
+
+        #expect(result.status == .completed, "\(result.error ?? "Unknown processing error")")
+        #expect(result.finalFormat == .mp4)
+        #expect(FileManager.default.fileExists(atPath: destination.appending(path: "clip.mp4").path))
+    }
+
+    @Test("Smaller File encodes an MP4 source to MP4")
+    func smallerFileMP4Source() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let destination = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: videoFixture, to: root.appending(path: "clip.mp4"))
+        let item = try #require(FileDiscovery().discover(at: [root]).first)
+        let options = ProcessingOptions(
+            outputFormat: .original,
+            destinationURL: destination,
+            videoPreset: .smallerFile
+        )
+        let plan = try #require(OutputPlanner().plan(images: [item], options: options).first)
+
+        let result = await VideoProcessor().process(plan, options: options)
+
+        #expect(result.status == .completed, "\(result.error ?? "Unknown processing error")")
+        #expect(result.finalFormat == .mp4)
+        #expect(FileManager.default.fileExists(atPath: destination.appending(path: "clip.mp4").path))
+    }
+
     @Test("Smaller file preset caps a 1080p source at 720p")
     func smallerFilePresetCapsResolution() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
@@ -296,6 +376,10 @@ struct ProcessingTests {
 
     private var videoFixture: URL {
         videoRoot.appending(path: "solid.mp4")
+    }
+
+    private var movFixture: URL {
+        videoRoot.appending(path: "solid.mov")
     }
 
     private var hdVideoFixture: URL {

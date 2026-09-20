@@ -77,7 +77,11 @@ public actor ImageProcessor {
         } catch is CancellationError {
             return ProcessingResult.failure(plan: plan, status: .cancelled, error: nil)
         } catch {
-            return ProcessingResult.failure(plan: plan, status: .error, error: error.localizedDescription)
+            return ProcessingResult.failure(
+                plan: plan,
+                status: .error,
+                error: ProcessingErrorMessage.fromFailure(error)
+            )
         }
     }
 
