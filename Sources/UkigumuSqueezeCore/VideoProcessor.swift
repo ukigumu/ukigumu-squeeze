@@ -104,6 +104,7 @@ public actor VideoProcessor {
             try await validate(temporary, expectedFormat: plan.finalFormat)
             try Task.checkCancellation()
             let encodedSize = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize.map(Int64.init) ?? 0
+            let outputSize = try await displaySize(of: temporary)
 
             if options.outputFormat == .original,
                options.resolutionMode == .original,
@@ -120,7 +121,7 @@ public actor VideoProcessor {
 
             try OutputCommitter.commit(temporary: temporary, plan: plan, fileManager: fileManager)
             return ProcessingResult.success(
-                plan: plan, width: targetSize.width, height: targetSize.height,
+                plan: plan, width: outputSize.width, height: outputSize.height,
                 finalBytes: encodedSize, metadataAvailable: !metadata.isEmpty,
                 status: .completed
             )
@@ -271,6 +272,20 @@ public actor VideoProcessor {
                 break
             }
         }
+    }
+
+    private func displaySize(of url: URL) async throws -> PixelSize {
+        let asset = AVURLAsset(url: url)
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+            throw UkigumuSqueezeError.validationFailed(url)
+        }
+        let naturalSize = try await track.load(.naturalSize)
+        let transform = try await track.load(.preferredTransform)
+        let display = naturalSize.applying(transform)
+        return PixelSize(
+            width: max(1, Int(abs(display.width).rounded())),
+            height: max(1, Int(abs(display.height).rounded()))
+        )
     }
 
     private func evenPixelSize(_ size: PixelSize) -> PixelSize {

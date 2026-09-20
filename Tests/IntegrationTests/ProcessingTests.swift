@@ -291,8 +291,8 @@ struct ProcessingTests {
         let result = await VideoProcessor().process(plan, options: options)
 
         #expect(result.status == .completed, "\(result.error ?? "Unknown processing error")")
-        #expect(result.width == 32)
-        #expect(result.height == 24)
+        #expect(result.width == 64)
+        #expect(result.height == 48)
     }
 
     private var videoFixture: URL {
