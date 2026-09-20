@@ -10,6 +10,16 @@ Ukigumu Squeeze is a native macOS photo and video compressor by **Ukigumu**. Dro
 
 Requires **macOS 14** or later.
 
+## Download
+
+Install the Mac app from the latest GitHub Release. You do not need to clone this repository.
+
+**[Download Ukigumu Squeeze](https://github.com/ukigumu/ukigumu-squeeze/releases/latest)**
+
+The release attaches a `.dmg`. Open it and drag **Ukigumu Squeeze** onto **Applications**.
+
+v0 builds are ad-hoc signed and not notarized. If macOS blocks the app, Control-click (or right-click) it and choose Open. See `Documentation/dmg.md`.
+
 ## Features
 
 - Drop files and folders, or select them with the native file panel.
@@ -82,6 +92,14 @@ Automated coverage: `swift test` and the XCUITest `testVideoCompressionWithDesti
 ## Build and test
 
 The app requires macOS 14 or later and Xcode with a Swift 6 toolchain.
+
+Most people should use the [Download](#download) DMG. Contributors on a Mac can build a Release disk image with:
+
+```sh
+make dmg
+```
+
+That produces `dist/UkigumuSqueeze-<version>.dmg`. See `Documentation/dmg.md`.
 
 Open `UkigumuSqueeze.xcodeproj` in Xcode on a Mac and run the **UkigumuSqueeze** scheme to build the app.
 
