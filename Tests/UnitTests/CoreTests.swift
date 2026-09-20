@@ -429,17 +429,19 @@ struct CoreTests {
         #expect(second == root)
         #expect(nested == root)
         #expect(await prompts.current() == 1)
-        #expect(!cache.isDenied(child))
+        #expect(await cache.isDenied(child) == false)
 
         let deniedCache = FolderAccessDecisionCache()
-        let cancelled = await deniedCache.decision(for: root) { _ in nil }
+        let cancelled = await deniedCache.decision(for: root) { _ in
+            return nil
+        }
         let childAfterDeny = await deniedCache.decision(for: child) { _ in
             await prompts.increment()
             return child
         }
         #expect(cancelled == nil)
         #expect(childAfterDeny == nil)
-        #expect(deniedCache.isDenied(child))
+        #expect(await deniedCache.isDenied(child))
         #expect(await prompts.current() == 1)
     }
 

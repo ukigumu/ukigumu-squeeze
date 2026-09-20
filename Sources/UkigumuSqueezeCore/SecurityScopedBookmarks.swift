@@ -158,7 +158,7 @@ public enum SandboxAccessProbe: Sendable {
 
 /// Asks at most once per folder root. A grant on a parent covers children.
 /// A denial on a parent skips child prompts.
-public final class FolderAccessDecisionCache: @unchecked Sendable {
+public actor FolderAccessDecisionCache {
     private enum Outcome {
         case granted(URL)
         case denied
@@ -166,7 +166,6 @@ public final class FolderAccessDecisionCache: @unchecked Sendable {
 
     private var outcomes: [String: Outcome] = [:]
     private var inflight: [String: Task<URL?, Never>] = [:]
-    private let lock = NSLock()
 
     public init() {}
 
@@ -175,34 +174,30 @@ public final class FolderAccessDecisionCache: @unchecked Sendable {
         prompt: @escaping @Sendable (URL) async -> URL?
     ) async -> URL? {
         let key = folder.standardizedFileURL.path
-        lock.lock()
         if let granted = grantedCovering(key) {
-            lock.unlock()
             return granted
         }
         if deniedCovering(key) {
-            lock.unlock()
             return nil
         }
         if let task = inflight[key] {
-            lock.unlock()
             return await task.value
         }
-        let task = Task { await prompt(folder) }
+        let task = Task {
+            return await prompt(folder)
+        }
         inflight[key] = task
-        lock.unlock()
-
         let result = await task.value
-        lock.lock()
-        outcomes[key] = result.map { .granted($0) } ?? .denied
+        if let result {
+            outcomes[key] = Outcome.granted(result)
+        } else {
+            outcomes[key] = Outcome.denied
+        }
         inflight[key] = nil
-        lock.unlock()
         return result
     }
 
     public func isDenied(_ folder: URL) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
         return deniedCovering(folder.standardizedFileURL.path)
     }
 
@@ -217,9 +212,13 @@ public final class FolderAccessDecisionCache: @unchecked Sendable {
     }
 
     private func deniedCovering(_ path: String) -> Bool {
-        outcomes.contains { deniedPath, outcome in
-            guard case .denied = outcome else { return false }
-            return path == deniedPath || path.hasPrefix(deniedPath + "/")
+        return outcomes.contains { deniedPath, outcome in
+            switch outcome {
+            case .denied:
+                return path == deniedPath || path.hasPrefix(deniedPath + "/")
+            case .granted:
+                return false
+            }
         }
     }
 }

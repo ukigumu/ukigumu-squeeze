@@ -288,7 +288,14 @@ final class AppModel {
         var failed: [ProcessingResult] = []
         for plan in plans {
             let required = SandboxAccessProbe.requiredFolders(for: plan, destination: destination)
-            if required.contains(where: { cache.isDenied($0) }) {
+            var denied = false
+            for folder in required {
+                if await cache.isDenied(folder) {
+                    denied = true
+                    break
+                }
+            }
+            if denied {
                 failed.append(
                     ProcessingResult.failure(
                         plan: plan,
@@ -326,9 +333,9 @@ final class AppModel {
     }
 
     private func requestFolderAccess(for folder: URL, cache: FolderAccessDecisionCache) async -> URL? {
-        await cache.decision(for: folder) { suggested in
-            await MainActor.run {
-                self.presentFolderAccessPanel(
+        return await cache.decision(for: folder) { suggested in
+            return await MainActor.run {
+                return self.presentFolderAccessPanel(
                     suggested: suggested,
                     treatingAsDestination: self.isDestinationFolder(suggested)
                 )
