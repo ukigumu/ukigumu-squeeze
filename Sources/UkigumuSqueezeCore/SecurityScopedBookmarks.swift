@@ -12,7 +12,9 @@ public final class SecurityScopedAccess: @unchecked Sendable {
     private let lock = NSLock()
 
     public init(urls: [URL]) {
-        urls.forEach(begin)
+        for url in urls {
+            _ = begin(url)
+        }
     }
 
     deinit {
