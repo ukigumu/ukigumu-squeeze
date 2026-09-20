@@ -103,6 +103,25 @@ final class UkigumuSqueezeEndToEndTests: UkigumuSqueezeUITestCase {
         XCTAssertFalse(try String(contentsOf: json, encoding: .utf8).contains(temporaryRoot.path))
     }
 
+    func testVideoCompressionWithDestination() throws {
+        let source = try copyFixture("Sources/Video/solid.mp4")
+        let destination = try makeDestination()
+        launch(inputs: [source], destination: destination, format: "mp4")
+        compressAndWait(expectedCount: 1, timeout: 40)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "solid.mp4").path))
+    }
+
+    func testMixedPhotoAndVideo() throws {
+        _ = try copyFixture("Sources/Synthetic/gradient.png", named: "mixed/photo.png")
+        _ = try copyFixture("Sources/Video/solid.mp4", named: "mixed/clip.mp4")
+        let destination = try makeDestination()
+        launch(inputs: [temporaryRoot.appending(path: "mixed")], destination: destination, format: "jpeg")
+        compressAndWait(expectedCount: 2, timeout: 40)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "photo.jpg").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appending(path: "clip.mp4").path))
+    }
+
     func testExistingDestinationIsOverwritten() throws {
         let source = try copyFixture("Sources/Synthetic/gradient.png")
         let destination = try makeDestination()

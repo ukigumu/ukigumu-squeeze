@@ -18,3 +18,11 @@ the license is stored in `TestFixtures/Licenses/libwebp-COPYING.txt`. It is
 necessary because ImageIO on the development macOS reads WebP but does not
 advertise a WebP destination. Ukigumu Squeeze calls the local `WebPEncodeRGBA`
 API directly and performs no network access at runtime.
+
+Video compression uses AVFoundation `AVAssetExportSession` on the same Mac.
+No ffmpeg binary is bundled and no file is uploaded. Compatible export presets
+are queried at runtime. Quality maps to Low, Medium, and High (HEVC High when
+the asset supports it). Resolution uses the same calculator as photos and is
+applied through a local video composition. AVI and MPEG can be discovered from
+their containers but are written as MP4 because those input containers are not
+writable through the system export session.

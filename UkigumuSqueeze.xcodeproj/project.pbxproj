@@ -19,6 +19,8 @@
 		A1000000000000000000000B /* WebPEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000C /* WebPEncoder.swift */; };
 		A1000000000000000000000C /* libwebp in Frameworks */ = {isa = PBXBuildFile; productRef = A30000000000000000000001 /* libwebp */; };
 		A1000000000000000000000D /* SecurityScopedBookmarks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000D /* SecurityScopedBookmarks.swift */; };
+		A10000000000000000000011 /* VideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* VideoProcessor.swift */; };
+		A10000000000000000000012 /* SafeOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* SafeOutput.swift */; };
 		A1000000000000000000000E /* UITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000000F /* UITestCase.swift */; };
 		A1000000000000000000000F /* UkigumuSqueezeEndToEndTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* UkigumuSqueezeEndToEndTests.swift */; };
 /* End PBXBuildFile section */
@@ -38,6 +40,8 @@
 		B1000000000000000000000B /* UkigumuSqueeze.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UkigumuSqueeze.entitlements; sourceTree = "<group>"; };
 		B1000000000000000000000C /* WebPEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebPEncoder.swift; sourceTree = "<group>"; };
 		B1000000000000000000000D /* SecurityScopedBookmarks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityScopedBookmarks.swift; sourceTree = "<group>"; };
+		B10000000000000000000011 /* VideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessor.swift; sourceTree = "<group>"; };
+		B10000000000000000000012 /* SafeOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeOutput.swift; sourceTree = "<group>"; };
 		B1000000000000000000000E /* UkigumuSqueezeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = UkigumuSqueezeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1000000000000000000000F /* UITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helpers/UITestCase.swift; sourceTree = "<group>"; };
 		B10000000000000000000010 /* UkigumuSqueezeEndToEndTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEnd/UkigumuSqueezeEndToEndTests.swift; sourceTree = "<group>"; };
@@ -64,7 +68,7 @@
 			isa = PBXGroup;
 			path = Sources/UkigumuSqueezeCore;
 			sourceTree = SOURCE_ROOT;
-			children = (B10000000000000000000004, B10000000000000000000005, B10000000000000000000006, B10000000000000000000007, B10000000000000000000008, B10000000000000000000009, B1000000000000000000000C, B1000000000000000000000D);
+			children = (B10000000000000000000004, B10000000000000000000005, B10000000000000000000006, B10000000000000000000007, B10000000000000000000008, B10000000000000000000009, B1000000000000000000000C, B1000000000000000000000D, B10000000000000000000011, B10000000000000000000012);
 		};
 		D10000000000000000000003 /* Products */ = {isa = PBXGroup; children = (B10000000000000000000000, B1000000000000000000000E); name = Products; sourceTree = "<group>"; };
 		D10000000000000000000004 /* UITests */ = {
@@ -128,7 +132,7 @@
 		C10000000000000000000002 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000009, A1000000000000000000000B, A1000000000000000000000D);
+			files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000007, A10000000000000000000008, A10000000000000000000009, A1000000000000000000000B, A1000000000000000000000D, A10000000000000000000011, A10000000000000000000012);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		C10000000000000000000004 /* Sources */ = {

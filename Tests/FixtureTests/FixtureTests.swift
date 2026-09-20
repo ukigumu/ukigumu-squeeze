@@ -25,7 +25,7 @@ struct FixtureTests {
     func formats() {
         let images = FileDiscovery().discover(at: [fixtureRoot.appending(path: "Sources")])
         let formats = Set(images.map(\.format))
-        #expect(formats.isSuperset(of: [.webp, .jpeg, .png, .avif, .heic, .tiff]))
+        #expect(formats.isSuperset(of: [.webp, .jpeg, .png, .avif, .heic, .tiff, .mp4, .mov]))
     }
 
     @Test("Corrupt fixtures do not stop discovery")

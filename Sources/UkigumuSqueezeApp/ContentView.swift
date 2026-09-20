@@ -45,7 +45,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Ukigumu Squeeze")
                     .font(.title2.weight(.bold))
-                Text("Local image compression. Nothing leaves your Mac.")
+                Text("Local photo and video compression. Nothing leaves your Mac.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -70,14 +70,14 @@ struct ContentView: View {
             ZStack {
                 Circle()
                     .fill(forestGreen.opacity(isTargeted ? 0.18 : 0.10))
-                Image(systemName: isTargeted ? "arrow.down.circle.fill" : "photo.on.rectangle.angled")
+                Image(systemName: isTargeted ? "arrow.down.circle.fill" : "rectangle.stack.badge.play")
                     .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(forestGreen)
             }
             .frame(width: 54, height: 54)
 
             VStack(spacing: 4) {
-                Text(isTargeted ? "Release to add" : "Drop images or folders")
+                Text(isTargeted ? "Release to add" : "Drop photos, videos, or folders")
                     .font(.headline)
                 Text("Folders are scanned recursively")
                     .font(.caption)
@@ -118,7 +118,7 @@ struct ContentView: View {
                 VStack(spacing: 4) {
                     Text("Your queue is empty")
                         .font(.headline)
-                    Text("Added images will appear here, ready to compress.")
+                    Text("Added photos and videos will appear here, ready to compress.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -133,9 +133,9 @@ struct ContentView: View {
             .accessibilityIdentifier("itemsTable")
         } else {
             Table(model.items) {
-                TableColumn("Image") { item in
+                TableColumn("File") { item in
                     HStack(spacing: 10) {
-                        Image(systemName: "photo")
+                        Image(systemName: item.format.kind == .video ? "film" : "photo")
                             .foregroundStyle(forestGreen)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.sourceURL.lastPathComponent)
@@ -190,8 +190,13 @@ struct ContentView: View {
                         Divider()
                         Picker("Format", selection: $model.outputFormat) {
                             Text("Keep original").tag(OutputFormat.original)
-                            ForEach(OutputFormat.allCases.filter { $0 != .original }, id: \.self) {
-                                Text($0.rawValue.uppercased()).tag($0)
+                            Divider()
+                            ForEach(OutputFormat.photoFormats, id: \.self) { format in
+                                Text(format.rawValue.uppercased()).tag(format)
+                            }
+                            Divider()
+                            ForEach(OutputFormat.videoFormats, id: \.self) { format in
+                                Text(format.rawValue.uppercased()).tag(format)
                             }
                         }
                         .accessibilityIdentifier("formatPicker")
@@ -300,8 +305,8 @@ struct ContentView: View {
                     .monospacedDigit()
             } else {
                 Label(
-                    model.items.isEmpty ? "Ready for images" : "\(model.items.count) item\(model.items.count == 1 ? "" : "s") ready",
-                    systemImage: model.items.isEmpty ? "checkmark.circle" : "photo.stack"
+                    model.items.isEmpty ? "Ready for files" : "\(model.items.count) item\(model.items.count == 1 ? "" : "s") ready",
+                    systemImage: model.items.isEmpty ? "checkmark.circle" : "square.stack"
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -382,10 +387,10 @@ struct ContentView: View {
 
     private var resolutionHelp: String {
         switch model.resolutionMode {
-        case .customWidth: "Height is calculated automatically. Images are never enlarged."
-        case .customHeight: "Width is calculated automatically. Images are never enlarged."
-        case .fit: "Fits inside this box while preserving aspect ratio. Images are never enlarged."
-        case .exact: "Uses the exact width and height and may change the aspect ratio. Images are never enlarged."
+        case .customWidth: "Height is calculated automatically. Files are never enlarged."
+        case .customHeight: "Width is calculated automatically. Files are never enlarged."
+        case .fit: "Fits inside this box while preserving aspect ratio. Files are never enlarged."
+        case .exact: "Uses the exact width and height and may change the aspect ratio. Files are never enlarged."
         default: "Reduces both dimensions while preserving aspect ratio."
         }
     }
@@ -394,14 +399,14 @@ struct ContentView: View {
         model.results[item.id]?.status ?? (model.isProcessing ? .processing : .pending)
     }
 
-    private func finalFormat(for item: DiscoveredImage) -> ImageFormat {
-        model.outputFormat.imageFormat ?? item.format
+    private func finalFormat(for item: DiscoveredImage) -> MediaFormat {
+        model.outputFormat.resolvedFormat(for: item.format)
     }
 
     private func finalSize(for item: DiscoveredImage) -> String {
         guard let result = model.results[item.id],
               result.status == .completed || result.status == .noImprovement else {
-            return "—"
+            return "-"
         }
         return ByteCountFormatter.string(fromByteCount: result.finalBytes, countStyle: .file)
     }

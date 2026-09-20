@@ -1,5 +1,10 @@
 import Foundation
 
+public enum MediaKind: String, Codable, Sendable {
+    case image
+    case video
+}
+
 public enum ImageFormat: String, Codable, CaseIterable, Sendable {
     case webp, jpeg, png, avif, heic, tiff
 
@@ -24,11 +29,80 @@ public enum ImageFormat: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum MediaFormat: String, Codable, CaseIterable, Sendable {
+    case webp, jpeg, png, avif, heic, tiff
+    case mp4, mov, m4v, avi, mpeg
+
+    public init(_ format: ImageFormat) {
+        self = MediaFormat(rawValue: format.rawValue)!
+    }
+
+    public static func from(extension value: String) -> MediaFormat? {
+        if let image = ImageFormat.from(extension: value) {
+            return MediaFormat(image)
+        }
+        switch value.lowercased() {
+        case "mp4": .mp4
+        case "mov", "qt": .mov
+        case "m4v": .m4v
+        case "avi": .avi
+        case "mpg", "mpeg", "mpe", "m2v": .mpeg
+        case "3gp", "3gpp": .mp4
+        default: nil
+        }
+    }
+
+    public var kind: MediaKind {
+        imageFormat == nil ? .video : .image
+    }
+
+    public var imageFormat: ImageFormat? {
+        ImageFormat(rawValue: rawValue)
+    }
+
+    public var preferredExtension: String {
+        imageFormat?.preferredExtension ?? rawValue
+    }
+
+    public var isWritableVideoContainer: Bool {
+        switch self {
+        case .mp4, .mov, .m4v: true
+        default: false
+        }
+    }
+
+    /// Container we can actually write with AVFoundation.
+    public var canonicalOutputFormat: MediaFormat {
+        kind == .video && !isWritableVideoContainer ? .mp4 : self
+    }
+}
+
 public enum OutputFormat: String, Codable, CaseIterable, Sendable {
-    case original, webp, jpeg, png, avif, heic, tiff
+    case original, webp, jpeg, png, avif, heic, tiff, mp4, mov
+
+    public static let photoFormats: [OutputFormat] = [.webp, .jpeg, .png, .avif, .heic, .tiff]
+    public static let videoFormats: [OutputFormat] = [.mp4, .mov]
 
     public var imageFormat: ImageFormat? {
         self == .original ? nil : ImageFormat(rawValue: rawValue)
+    }
+
+    public var mediaFormat: MediaFormat? {
+        self == .original ? nil : MediaFormat(rawValue: rawValue)
+    }
+
+    public func resolvedFormat(for source: MediaFormat) -> MediaFormat {
+        guard let selected = mediaFormat else {
+            return source.canonicalOutputFormat
+        }
+        switch (source.kind, selected.kind) {
+        case (.image, .image), (.video, .video):
+            return selected
+        case (.video, .image):
+            return source.canonicalOutputFormat
+        case (.image, .video):
+            return source
+        }
     }
 }
 
@@ -118,10 +192,10 @@ public struct DiscoveredImage: Identifiable, Hashable, Sendable {
     public let sourceURL: URL
     public let rootURL: URL
     public let relativePath: String
-    public let format: ImageFormat
+    public let format: MediaFormat
     public let byteCount: Int64
 
-    public init(sourceURL: URL, rootURL: URL, relativePath: String, format: ImageFormat, byteCount: Int64) {
+    public init(sourceURL: URL, rootURL: URL, relativePath: String, format: MediaFormat, byteCount: Int64) {
         self.id = UUID()
         self.sourceURL = sourceURL
         self.rootURL = rootURL
@@ -168,8 +242,8 @@ public struct ProcessingResult: Identifiable, Encodable, Sendable {
     public let finalRelativePath: String
     public let originalName: String
     public let finalName: String
-    public let originalFormat: ImageFormat
-    public let finalFormat: ImageFormat
+    public let originalFormat: MediaFormat
+    public let finalFormat: MediaFormat
     public let width: Int
     public let height: Int
     public let originalBytes: Int64
@@ -212,19 +286,70 @@ public struct ProcessingResult: Identifiable, Encodable, Sendable {
 public enum UkigumuSqueezeError: LocalizedError {
     case unsupportedFormat(URL)
     case invalidImage(URL)
+    case invalidVideo(URL)
     case outputFormatUnavailable(ImageFormat)
+    case videoExportUnavailable
     case collision(URL)
     case originalFolderConflict(URL)
     case validationFailed(URL)
 
     public var errorDescription: String? {
         switch self {
-        case .unsupportedFormat(let url): "Unsupported image format: \(url.lastPathComponent)"
+        case .unsupportedFormat(let url): "Unsupported file format: \(url.lastPathComponent)"
         case .invalidImage(let url): "Invalid or corrupt image: \(url.lastPathComponent)"
+        case .invalidVideo(let url): "Invalid or corrupt video: \(url.lastPathComponent)"
         case .outputFormatUnavailable(let format): "\(format.rawValue.uppercased()) encoding is unavailable on this macOS version"
+        case .videoExportUnavailable: "No compatible local video export preset is available"
         case .collision(let url): "Output already exists: \(url.path)"
         case .originalFolderConflict(let url): "An Original folder conflicts with the required original folder: \(url.path)"
-        case .validationFailed(let url): "The encoded image could not be validated: \(url.lastPathComponent)"
+        case .validationFailed(let url): "The encoded file could not be validated: \(url.lastPathComponent)"
         }
+    }
+}
+
+extension ProcessingResult {
+    static func success(
+        plan: PlannedOutput,
+        width: Int,
+        height: Int,
+        finalBytes: Int64,
+        metadataAvailable: Bool,
+        status: ItemStatus
+    ) -> ProcessingResult {
+        ProcessingResult(
+            id: plan.image.id,
+            originalRelativePath: plan.image.relativePath,
+            finalRelativePath: plan.relativeOutputPath,
+            originalName: plan.image.sourceURL.lastPathComponent,
+            finalName: plan.outputURL.lastPathComponent,
+            originalFormat: plan.image.format,
+            finalFormat: plan.finalFormat,
+            width: width,
+            height: height,
+            originalBytes: plan.image.byteCount,
+            finalBytes: finalBytes,
+            metadataAvailable: metadataAvailable,
+            status: status,
+            error: nil
+        )
+    }
+
+    static func failure(plan: PlannedOutput, status: ItemStatus, error: String?) -> ProcessingResult {
+        ProcessingResult(
+            id: plan.image.id,
+            originalRelativePath: plan.image.relativePath,
+            finalRelativePath: plan.relativeOutputPath,
+            originalName: plan.image.sourceURL.lastPathComponent,
+            finalName: plan.outputURL.lastPathComponent,
+            originalFormat: plan.image.format,
+            finalFormat: plan.finalFormat,
+            width: 0,
+            height: 0,
+            originalBytes: plan.image.byteCount,
+            finalBytes: 0,
+            metadataAvailable: false,
+            status: status,
+            error: error
+        )
     }
 }

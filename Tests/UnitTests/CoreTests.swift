@@ -101,7 +101,99 @@ struct CoreTests {
         #expect(!json.contains("/Users/"))
     }
 
-    private func fixture(relativePath: String, format: ImageFormat) -> DiscoveredImage {
+    @Test("Video extensions map to video formats")
+    func videoExtensions() {
+        #expect(MediaFormat.from(extension: "MP4") == .mp4)
+        #expect(MediaFormat.from(extension: "mov") == .mov)
+        #expect(MediaFormat.from(extension: "m4v") == .m4v)
+        #expect(MediaFormat.from(extension: "avi") == .avi)
+        #expect(MediaFormat.from(extension: "mpeg") == .mpeg)
+        #expect(MediaFormat.from(extension: "3gp") == .mp4)
+        #expect(MediaFormat.mp4.kind == .video)
+        #expect(MediaFormat.jpeg.kind == .image)
+    }
+
+    @Test("Keep original remaps unwritable video containers to MP4")
+    func videoContainerFallback() throws {
+        let video = fixture(relativePath: "clip.avi", format: .avi)
+        let plan = try OutputPlanner().plan(images: [video], options: ProcessingOptions()).first
+        #expect(plan?.finalFormat == .mp4)
+        #expect(plan?.relativeOutputPath == "clip.mp4")
+    }
+
+    @Test("Photo format selection compresses video in its writable container")
+    func mixedFormatResolution() throws {
+        let photo = fixture(relativePath: "photo.png", format: .png)
+        let video = fixture(relativePath: "clip.mov", format: .mov)
+        let options = ProcessingOptions(outputFormat: .jpeg)
+        let plans = try OutputPlanner().plan(images: [photo, video], options: options)
+        #expect(plans[0].finalFormat == .jpeg)
+        #expect(plans[0].relativeOutputPath == "photo.jpg")
+        #expect(plans[1].finalFormat == .mov)
+        #expect(plans[1].relativeOutputPath == "clip.mov")
+    }
+
+    @Test("Video format selection leaves photos unchanged")
+    func videoFormatLeavesPhotos() throws {
+        let photo = fixture(relativePath: "photo.png", format: .png)
+        let video = fixture(relativePath: "clip.mov", format: .mov)
+        let options = ProcessingOptions(outputFormat: .mp4)
+        let plans = try OutputPlanner().plan(images: [photo, video], options: options)
+        #expect(plans[0].finalFormat == .png)
+        #expect(plans[0].relativeOutputPath == "photo.png")
+        #expect(plans[1].finalFormat == .mp4)
+        #expect(plans[1].relativeOutputPath == "clip.mp4")
+    }
+
+    @Test("Video container headers are sniffed without a file extension")
+    func videoHeaderSniffer() {
+        var mp4 = Data(count: 12)
+        mp4.replaceSubrange(4..<8, with: Data("ftyp".utf8))
+        mp4.replaceSubrange(8..<12, with: Data("isom".utf8))
+        #expect(VideoContainerSniffer.format(header: mp4) == .mp4)
+
+        var mov = Data(count: 12)
+        mov.replaceSubrange(4..<8, with: Data("ftyp".utf8))
+        mov.replaceSubrange(8..<12, with: Data("qt  ".utf8))
+        #expect(VideoContainerSniffer.format(header: mov) == .mov)
+
+        var audio = Data(count: 12)
+        audio.replaceSubrange(4..<8, with: Data("ftyp".utf8))
+        audio.replaceSubrange(8..<12, with: Data("M4A ".utf8))
+        #expect(VideoContainerSniffer.format(header: audio) == nil)
+
+        var avi = Data("RIFF".utf8)
+        avi.append(Data(count: 4))
+        avi.append(Data("AVI ".utf8))
+        #expect(VideoContainerSniffer.format(header: avi) == .avi)
+    }
+
+    @Test("Video quality maps to AVFoundation export presets")
+    func videoPresets() {
+        #expect(
+            VideoPresetSelector.choose(
+                quality: 0.2,
+                customSize: false,
+                compatible: ["AVAssetExportPresetLowQuality"]
+            ) == "AVAssetExportPresetLowQuality"
+        )
+        #expect(
+            VideoPresetSelector.choose(
+                quality: 0.9,
+                customSize: false,
+                compatible: ["AVAssetExportPresetHighestQuality"]
+            ) == "AVAssetExportPresetHighestQuality"
+        )
+        #expect(
+            VideoPresetSelector.choose(
+                quality: 0.5,
+                customSize: true,
+                compatible: ["AVAssetExportPresetHighestQuality"]
+            ) == "AVAssetExportPresetHighestQuality"
+        )
+    }
+
+    private func fixture(relativePath: String, format: MediaFormat) -> DiscoveredImage {
         let root = URL(filePath: "/tmp/source")
         return DiscoveredImage(
             sourceURL: root.appending(path: relativePath),
@@ -133,6 +225,25 @@ struct DiscoveryTests {
         #expect(results.count == 1)
         #expect(results.first?.relativePath == "nested/valid.PNG")
         #expect(results.first?.format == .png)
+    }
+
+    @Test("Discovers video files by container contents")
+    func videos() throws {
+        let temporary = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try FileManager.default.createDirectory(at: temporary.appending(path: "nested"), withIntermediateDirectories: true)
+        let root = URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: "TestFixtures/Sources/Video")
+        try FileManager.default.copyItem(at: root.appending(path: "solid.mp4"), to: temporary.appending(path: "nested/clip.mp4"))
+        try FileManager.default.copyItem(at: root.appending(path: "solid.mov"), to: temporary.appending(path: "clip.mov"))
+        try makePNG(at: temporary.appending(path: "still.png"))
+
+        let results = FileDiscovery().discover(at: [temporary])
+        #expect(Set(results.map(\.format)) == [.mp4, .mov, .png])
+        #expect(results.map(\.relativePath) == ["clip.mov", "nested/clip.mp4", "still.png"])
     }
 
     private func makePNG(at url: URL) throws {
