@@ -1,6 +1,7 @@
 name: Release DMG
 
 on:
+  pull_request:
   push:
     tags:
       - "v*"
@@ -10,6 +11,11 @@ on:
         description: "Release tag to publish (for example v0.1.0). Leave empty to use v1.0.0."
         required: false
         type: string
+      publish:
+        description: "Create or update the GitHub Release after a successful DMG build"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -31,6 +37,8 @@ jobs:
             TAG="$GITHUB_REF_NAME"
           elif [ -n "${{ inputs.tag }}" ]; then
             TAG="${{ inputs.tag }}"
+          elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            TAG="v0.0.0-pr"
           else
             TAG="v1.0.0"
           fi
@@ -56,6 +64,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
+        if: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.publish) }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
